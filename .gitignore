@@ -1,0 +1,16 @@
+*.swp
+*.pyc
+*Session.vim*
+*.o
+*.a
+*.so
+*.log
+cscope.*
+.*.swo
+tags
+var
+/iris-relay/docker/logs
+/iris-relay/docker/var
+/src/iris_relay.egg-info
+/env
+/venv

@@ -1,0 +1,35 @@
+# these values are mostly dummies to satisfy the end to end tests.
+# if you want to run this seriously you will need to change most/all of it
+server:
+  enable_basic_auth: False
+  #debug: True
+  basic_auth:
+    user1: 'pass1'
+  lb_routing_path: /iris-relay
+twilio:
+  remote_host: 'localhost:11648'
+  auth_token: 'foobar'
+
+# change this to where you have iris-api running
+iris:
+  host: jgillott-ld1.linkedin.biz
+  port: 16649
+  api_key: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+  hook:
+    gmail: 'response/gmail'
+    twilio_calls: 'response/twilio/calls'
+    twilio_messages: 'response/twilio/messages'
+
+gmail:
+  project: iris-1234
+  push_endpoint: https://www.fooo.bar/iris-relay/api/v0/gmail/relay
+  scope:
+    - https://mail.google.com/
+    - https://www.googleapis.com/auth/pubsub
+  sub: iris@foo.bar
+  topic: iris_gmail_push
+  subscription: gmail
+  creds: './configs/client_secret.apps.googleusercontent.com.json'
+  verification_code: googleabcdefg.html
+  token: lbbc1797daaaaaaavaa6d3f0aad45e66
+  var_dir: '/home/iris/var/relay'
