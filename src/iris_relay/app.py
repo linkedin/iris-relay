@@ -374,17 +374,18 @@ class TwilioMessagesRelay(object):
 
 
 class SlackMessagesRelay(object):
-    def __init__(self, config):
+    def __init__(self, config, iclient):
         self.config = config
+        self.iclient = iclient
         self.verification_token = self.config['slack']['auth_token']
 
     def valid_token(self, token):
         return equals(self.verification_token, token)
 
-    def return_slack_message(self, resp):
+    def return_slack_message(self, resp, text):
         resp.status = falcon.HTTP_200
         resp.content_type = 'application/json'
-        resp.body = ujson.dumps({'text': self.config['slack']['text']})
+        resp.body = ujson.dumps({'text': text})
 
     def on_post(self, req, resp):
         """
@@ -396,12 +397,34 @@ class SlackMessagesRelay(object):
                 logger.error('Invalid token sent in the request.')
                 raise falcon.HTTPUnauthorized('Access denied',
                                               'Not a valid auth token')
-            # TODO: Call Iris API to claim the incident
-            self.return_slack_message(resp)
+            try:
+                msg_id = int(payload['callback_id'])
+            except KeyError as e:
+                logger.error('callback_id not found in the json payload.')
+                raise falcon.HTTPBadRequest('Bad Request', 'Callback id not found')
+            except ValueError as e:
+                logger.error('Callback ID not an integer: %s', payload['callback_id'])
+                raise falcon.HTTPBadRequest('Bad Request', 'Callback id must be int')
+            data = {'msg_id': msg_id,
+                    'source': payload['user']['name'],
+                    'content': payload['actions'][0]['name']}
+            endpoint = self.config['iris']['hook']['slack']
+            try:
+                result = self.iclient.post(endpoint, data)
+            except MaxRetryError as e:
+                logger.error(e.reason)
+                return
+            if result.status == 400:
+                raise falcon.HTTPBadRequest('Bad Request', '')
+            elif result.status is not 200:
+                raise falcon.HTTPInternalServerError('Internal Server Error', 'Unknown response from the api')
+            else:
+                content = process_api_response(result.data)
+                self.return_slack_message(resp, content)
             return
         except Exception as e:
-            logger.error('Unable to read payload from slack', e.reason)
-            raise falcon.HTTPBadRequest('No Payload')
+            logger.error('Unable to read payload from slack')
+            raise falcon.HTTPBadRequest('Bad Request', 'Unable to read the payload from slack')
 
 
 class SlackAuthenticate(object):
@@ -483,7 +506,7 @@ class AuthMiddleware(object):
                 elif segments[2] == 'gmail' or segments[2] == 'gmail-oneclick':
                     return
         elif len(segments) == 1:
-            if segments[0] == 'health' or segments[0] == 'healthcheck':
+            if segments[0] == 'health' or segments[0] == 'healthcheck' or segments[2] == 'slack':
                 return
             elif segments[0] == self.config['gmail'].get('verification_code'):
                 return
@@ -534,6 +557,7 @@ def get_relay_app(config=None):
     twilio_messages_relay = TwilioMessagesRelay(config, iclient)
     slack_authenticate = SlackAuthenticate()
     slack_messages_relay = SlackMessagesRelay(config)
+    slack_messages_relay = SlackMessagesRelay(config, iclient)
     healthcheck = Healthcheck()
 
     version = 0
