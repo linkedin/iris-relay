@@ -503,10 +503,10 @@ class AuthMiddleware(object):
                                        sig, expected_sigs)
                         raise falcon.HTTPUnauthorized('Access denied', 'Twilio auth failure', [])
                     return
-                elif segments[2] == 'gmail' or segments[2] == 'gmail-oneclick':
+                elif segments[2] == 'gmail' or segments[2] == 'gmail-oneclick' or segments[2] == 'slack':
                     return
         elif len(segments) == 1:
-            if segments[0] == 'health' or segments[0] == 'healthcheck' or segments[2] == 'slack':
+            if segments[0] == 'health' or segments[0] == 'healthcheck':
                 return
             elif segments[0] == self.config['gmail'].get('verification_code'):
                 return
@@ -556,7 +556,6 @@ def get_relay_app(config=None):
     twilio_calls_relay = TwilioCallsRelay(config, iclient)
     twilio_messages_relay = TwilioMessagesRelay(config, iclient)
     slack_authenticate = SlackAuthenticate()
-    slack_messages_relay = SlackMessagesRelay(config)
     slack_messages_relay = SlackMessagesRelay(config, iclient)
     healthcheck = Healthcheck()
 
