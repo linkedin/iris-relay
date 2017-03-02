@@ -10,7 +10,7 @@ twilio:
   remote_host: 'localhost:11648'
   auth_token: 'foobar'
 slack:
-  auth_token: '1X32RUIeMGe2XJEI9lYpBGeU'
+  auth_token: 'foo'
   response_text: 'Alert claimed.'
 iris:
   host: 'localhost'
@@ -21,6 +21,7 @@ iris:
     gmail_one_click: 'response/gmail-oneclick'
     twilio_calls: 'response/twilio/calls'
     twilio_messages: 'response/twilio/messages'
+    slack: 'response/slack'
 gmail:
   project: iris-1234
   push_endpoint: https://www.fooo.bar/iris-relay/api/v0/gmail/relay
