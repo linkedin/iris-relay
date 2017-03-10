@@ -270,13 +270,17 @@ class TwilioCallsGather(object):
         content = req.get_param('content', required=True)
         instruction = req.get_param('instruction', required=True)
         message_id = req.get_param('message_id')
-        if not message_id.isdigit() and not uuid4hex.match(message_id):
-            raise falcon.HTTPBadRequest('Bad message id', 'message id must be int/hex')
         loop = req.get_param('loop')
 
-        action = self.get_api_url(req.env, 'v0', 'twilio/calls/relay?') + urlencode({
-            'message_id': message_id,
-        })
+        if message_id:
+            if not message_id.isdigit() and not uuid4hex.match(message_id):
+                raise falcon.HTTPBadRequest('Bad message id', 'message id must be int/hex')
+
+            action = self.get_api_url(req.env, 'v0', 'twilio/calls/relay?') + urlencode({
+                'message_id': message_id,
+            })
+        else:
+            action = self.get_api_url(req.env, 'v0', 'twilio/calls/relay')
 
         r = twiml.Response()
         if req.get_param('AnsweredBy') == 'machine':
@@ -284,11 +288,16 @@ class TwilioCallsGather(object):
             r.say(content, voice='alice', language="en-US", loop=loop)
         else:
             r.pause(length=2)
-            r.say('Press pound for menu.', voice='alice', language="en-US")
-            with r.gather(timeout=0, finishOnKey="#") as g:
+            if message_id:
+                r.say('Press pound for menu.', voice='alice', language="en-US")
+
+            with r.gather(timeout=0, finishOnKey="#", action=action) as g:
                 g.say(content, voice='alice', language="en-US")
-            with r.gather(numDigits=1, action=action) as g:
-                g.say(instruction, voice='alice', loop=loop, language="en-US")
+
+            if message_id:
+                with r.gather(numDigits=1, action=action) as g:
+                    g.say(instruction, voice='alice', loop=loop, language="en-US")
+
         resp.status = falcon.HTTP_200
         resp.body = str(r)
         resp.content_type = 'application/xml'
@@ -312,7 +321,14 @@ class TwilioCallsRelay(object):
         """
         Accept twilio gather callbacks and forward to iris API
         """
-        message_id = req.get_param('message_id', required=True)
+        message_id = req.get_param('message_id')
+
+        # If we weren't given a message_id, this is an OOB message and there isn't
+        # anything to say, so hang up.
+        if not message_id:
+            self.return_twixml_call('Thank you', resp)
+            return
+
         if not message_id.isdigit() and not uuid4hex.match(message_id):
             raise falcon.HTTPBadRequest('Bad message id', 'message id must be int/hex')
 
