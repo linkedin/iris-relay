@@ -400,13 +400,8 @@ class TwilioDeliveryStatus(object):
         to iris-api
         """
 
-        data = {
-            'sid': req.get_param('MessageSid', True),
-            'status': req.get_param('MessageStatus', True)
-        }
-
         try:
-            re = self.iclient.post(self.endpoint, data)
+            re = self.iclient.post(self.endpoint, req.context['body'], raw=True)
         except MaxRetryError as e:
             logger.exception('Failed posting data to iris-api')
             raise falcon.HTTPInternalServerError('Internal Server Error', 'API call failed')
