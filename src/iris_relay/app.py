@@ -408,7 +408,7 @@ class TwilioDeliveryStatus(object):
 
         if re.status is not 204:
             logger.error('Invalid response from API for delivery status update: %s', re.status)
-            raise falcon.HTTPInternalServerError('Internal Server Error', 'Invalid response from API')
+            raise falcon.HTTPBadRequest('Likely bad params passed', 'Invalid response from API')
 
         resp.status = falcon.HTTP_204
 
