@@ -402,7 +402,7 @@ class TwilioDeliveryStatus(object):
 
         try:
             re = self.iclient.post(self.endpoint, req.context['body'], raw=True)
-        except MaxRetryError as e:
+        except MaxRetryError:
             logger.exception('Failed posting data to iris-api')
             raise falcon.HTTPInternalServerError('Internal Server Error', 'API call failed')
 
