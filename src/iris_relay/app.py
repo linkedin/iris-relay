@@ -389,6 +389,35 @@ class TwilioMessagesRelay(object):
             return
 
 
+class TwilioDeliveryStatus(object):
+    def __init__(self, config, iclient):
+        self.iclient = iclient
+        self.endpoint = config['iris']['hook']['twilio_status']
+
+    def on_post(self, req, resp):
+        """
+        Accept twilio POST that has message delivery status, and pass it
+        to iris-api
+        """
+
+        data = {
+            'sid': req.get_param('MessageSid', True),
+            'status': req.get_param('MessageStatus', True)
+        }
+
+        try:
+            re = self.iclient.post(self.endpoint, data)
+        except MaxRetryError as e:
+            logger.exception('Failed posting data to iris-api')
+            raise falcon.HTTPInternalServerError('Internal Server Error', 'API call failed')
+
+        if re.status is not 204:
+            logger.error('Invalid response from API for delivery status update: %s', re.status)
+            raise falcon.HTTPInternalServerError('Internal Server Error', 'Invalid response from API')
+
+        resp.status = falcon.HTTP_204
+
+
 class SlackMessagesRelay(object):
     def __init__(self, config, iclient):
         self.config = config
@@ -573,6 +602,7 @@ def get_relay_app(config=None):
     twilio_messages_relay = TwilioMessagesRelay(config, iclient)
     slack_authenticate = SlackAuthenticate()
     slack_messages_relay = SlackMessagesRelay(config, iclient)
+    twilio_delivery_status = TwilioDeliveryStatus(config, iclient)
     healthcheck = Healthcheck()
 
     version = 0
@@ -582,6 +612,7 @@ def get_relay_app(config=None):
     app.add_route('/api/v%d/twilio/calls/gather' % version, twilio_calls_gather)
     app.add_route('/api/v%d/twilio/calls/relay' % version, twilio_calls_relay)
     app.add_route('/api/v%d/twilio/messages/relay' % version, twilio_messages_relay)
+    app.add_route('/api/v%d/twilio/status' % version, twilio_delivery_status)
     app.add_route('/api/v%d/slack/authenticate' % version, slack_authenticate)
     app.add_route('/api/v%d/slack/messages/relay' % version, slack_messages_relay)
     app.add_route('/health', healthcheck)

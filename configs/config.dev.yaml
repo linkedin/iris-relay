@@ -21,6 +21,7 @@ iris:
     gmail_one_click: 'response/gmail-oneclick'
     twilio_calls: 'response/twilio/calls'
     twilio_messages: 'response/twilio/messages'
+    twilio_status: 'twilio/deliveryupdate'
     slack: 'response/slack'
 gmail:
   project: iris-1234
