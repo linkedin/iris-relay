@@ -15,6 +15,7 @@ from urllib3.exceptions import MaxRetryError
 import yaml
 import falcon
 import ujson
+import falcon.uri
 
 from iris_relay.client import IrisClient
 from iris_relay.gmail import Gmail
@@ -432,7 +433,8 @@ class SlackMessagesRelay(object):
         Accept slack's message from interactive buttons
         """
         try:
-            payload = ujson.loads(req.form['payload'])
+            form_post = falcon.uri.parse_query_string(req.context['body'])
+            payload = ujson.loads(form_post['payload'])
             if not self.valid_token(payload['token']):
                 logger.error('Invalid token sent in the request.')
                 raise falcon.HTTPUnauthorized('Access denied',
@@ -462,8 +464,8 @@ class SlackMessagesRelay(object):
                 content = process_api_response(result.data)
                 self.return_slack_message(resp, content)
             return
-        except Exception as e:
-            logger.error('Unable to read payload from slack')
+        except Exception:
+            logger.exception('Unable to read payload from slack. Our post body: %s', req.context['body'])
             raise falcon.HTTPBadRequest('Bad Request', 'Unable to read the payload from slack')
 
 
