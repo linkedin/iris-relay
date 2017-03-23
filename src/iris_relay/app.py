@@ -479,10 +479,24 @@ class SlackAuthenticate(object):
 
 
 class Healthcheck(object):
+    def __init__(self, path):
+        self.healthcheck_path = path
 
     def on_get(self, req, resp):
+        if not self.healthcheck_path:
+            logger.error('Healthcheck path not set')
+            raise falcon.HTTPNotFound()
+
+        try:
+            with open(self.healthcheck_path) as f:
+                health = f.readline().strip()
+        except IOError:
+            logger.exception('Failed reading healthcheck file')
+            raise falcon.HTTPNotFound()
+
         resp.status = falcon.HTTP_200
-        resp.body = 'GOOD'
+        resp.content_type = 'text/plain'
+        resp.body = health
 
 
 class GmailVerification(object):
@@ -600,7 +614,7 @@ def get_relay_app(config=None):
     slack_authenticate = SlackAuthenticate()
     slack_messages_relay = SlackMessagesRelay(config, iclient)
     twilio_delivery_status = TwilioDeliveryStatus(config, iclient)
-    healthcheck = Healthcheck()
+    healthcheck = Healthcheck(config.get('healthcheck_path'))
 
     version = 0
     app.add_route('/api/v%d/gmail/relay' % version, gmail_relay)
