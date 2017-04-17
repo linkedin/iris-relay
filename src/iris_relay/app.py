@@ -7,6 +7,7 @@ import re
 from base64 import b64encode, decodestring, urlsafe_b64encode
 from hashlib import sha1, sha512
 from logging import basicConfig, getLogger
+import logging
 from urllib import unquote_plus, urlencode, unquote
 
 from streql import equals
@@ -592,6 +593,9 @@ def read_config_from_argv():
 
 
 def get_relay_app(config=None):
+    basicConfig(format='[%(asctime)s] [%(process)d] [%(levelname)s] %(name)s %(message)s',
+                        level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S %z')
+
     if not config:
         config = read_config_from_argv()
 
@@ -631,7 +635,6 @@ def get_relay_app(config=None):
         gmail_verify = GmailVerification(vcode)
         app.add_route('/' + vcode, gmail_verify)
 
-    basicConfig()
     return app
 
 
@@ -645,5 +648,4 @@ def get_relay_server():
 
 
 if __name__ == '__main__':
-    basicConfig()
     get_relay_server().serve_forever()
