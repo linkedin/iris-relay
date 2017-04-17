@@ -594,7 +594,7 @@ def read_config_from_argv():
 
 def get_relay_app(config=None):
     basicConfig(format='[%(asctime)s] [%(process)d] [%(levelname)s] %(name)s %(message)s',
-                        level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S %z')
+                level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S %z')
 
     if not config:
         config = read_config_from_argv()
