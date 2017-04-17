@@ -130,6 +130,7 @@ class GmailRelay(object):
         data = body.get('message', {}).get('data')
 
         results = []
+        mark_read_mids = set()
         for msg_id_gmail, headers, body in self.gmail.list_unread_message():
             data = ujson.dumps({'body': body, 'headers': headers})
             try:
@@ -137,16 +138,13 @@ class GmailRelay(object):
             except MaxRetryError as ex:
                 logger.error(ex.reason)
             else:
-                msg_labels = None
                 # If status from Iris API == 204 or 400, mark message as read
                 if result.status == 204 or result.status == 400:
-                    msg_labels = {
-                        'removeLabelIds': ['UNREAD']
-                    }
-                if msg_labels is not None:
-                    logger.info('Modifying labels: %s', str(msg_labels))
-                    self.gmail.modify_message(msg_id_gmail, msg_labels)
+                    logger.info('Will mark gmail message %s as read', msg_id_gmail)
+                    mark_read_mids.add(msg_id_gmail)
                 results.append(result)
+        if mark_read_mids:
+            self.gmail.batch_mark_read(mark_read_mids)
         # FIXME: send metrics for number of messages pushed from gmail
         if len(results) == 0:
             user_id, history_id = self.gmail.parse_gmail_push_data(data)
