@@ -19,6 +19,7 @@ from oauth2client.file import Storage
 from oauth2client import client, tools
 # TODO(khrichar): figure out why keyring fails on OS X
 # from oauth2client.keyring_storage import Storage
+import itertools
 
 logger = getLogger(__name__)
 
@@ -355,9 +356,11 @@ class Gmail(object):
         try:
             response = self.client.users().messages().list(userId=user_id,
                                                            q=query).execute()
-            msg_ids = []
+            kill_ids = set()
+            msg_ids = set()
             if 'messages' in response:
-                msg_ids.extend([m['id'] for m in response['messages']])
+                msg_ids.update(m['id'] for m in response['messages'])
+                kill_ids.update(m['id'] for m in itertools.ifilterfalse(self.filter_pointless_messages, response['messages']))
 
             while 'nextPageToken' in response:
                 page_token = response['nextPageToken']
@@ -370,12 +373,16 @@ class Gmail(object):
                     logger.error('no messages key found in gmail response: %s',
                                  response)
                     continue
-                msg_ids.extend([m['id'] for m in response['messages']])
+                msg_ids.update(m['id'] for m in response['messages'])
+                kill_ids.update(m['id'] for m in itertools.ifilterfalse(self.filter_pointless_messages, response['messages']))
 
-            for msg_id in msg_ids:
+            for msg_id in msg_ids - kill_ids:
                 message = self.get_message(msg_id, user_id) or {}
                 for headers, content in self.process_message(message):
                     yield msg_id, headers, content
+
+            if kill_ids:
+                self.batch_mark_read(kill_ids)
         except (socks.HTTPError, errors.HttpError) as error:
             logger.error('An error occurred: %s' % error)
 
@@ -414,6 +421,55 @@ class Gmail(object):
     def parse_gmail_push_data(data):
         notification = loads(urlsafe_b64decode(str(data)))
         return notification.get('emailAddress'), notification.get('historyId')
+
+    @staticmethod
+    def filter_pointless_messages(message):
+        for header in message['payload']['headers']:
+            if header['name'] == 'X-Autoreply' and header['value'] == 'yes':
+                return False
+            elif header['name'] == 'Auto-Submitted' and header['value'] == 'auto-replied':
+                return False
+        return True
+
+    def batch_mark_read(self, message_ids, user_id='me'):
+        """Mark multiple message IDs as read (remove UNREAD label)
+
+        :param message_ids: list or set of message IDs
+        :rtype: None
+        """
+
+        self.connect()
+
+        message_ids = list(message_ids)
+
+        messages_per_batch = 500
+        pos = 0
+
+        # Batch modify messages in chunks of 500, as there is an upper limit on the number
+        # of messages per batch call.
+        # https://developers.google.com/gmail/api/v1/reference/users/messages/batchModify
+        while True:
+            new_pos = pos + messages_per_batch
+            ids = message_ids[pos:new_pos]
+            pos = new_pos
+            if not ids:
+                break
+
+            body = {
+                'ids': ids,
+                'addLabelIds': [],
+                'removeLabelIds': ['UNREAD']
+            }
+
+            try:
+                self.client.users().messages().batchModify(
+                    userId=user_id,
+                    body=body
+                ).execute()
+            except (socks.HTTPError, errors.HttpError):
+                logger.exception('Failed batch marking messages as read: %s', ids)
+            else:
+                logger.info('Successfully marked messages as read: %s', ids)
 
     def process_push_notification(
             self,
