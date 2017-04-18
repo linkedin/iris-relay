@@ -24,6 +24,11 @@ import itertools
 logger = getLogger(__name__)
 
 
+email_headers_to_ignore = frozenset([('X-Autoreply', 'yes'),
+                                     ('Auto-Submitted', 'auto-replied'),
+                                     ('Precedence', 'bulk')])
+
+
 class Gmail(object):
     """
     :param config: gmail configuration
@@ -424,10 +429,14 @@ class Gmail(object):
 
     @staticmethod
     def filter_pointless_messages(message):
-        for header in message['payload']['headers']:
-            if header['name'] == 'X-Autoreply' and header['value'] == 'yes':
-                return False
-            elif header['name'] == 'Auto-Submitted' and header['value'] == 'auto-replied':
+        payload = message.get('payload')
+        if not payload:
+            logger.warning('Payload not found in %s', message)
+            return True
+        for header in payload.get('headers', []):
+            key = (header.get('name'), header.get('value'))
+            if key in email_headers_to_ignore:
+                logger.warning('Filtering out message %s due to header combination %s: %s', message, *key)
                 return False
         return True
 
