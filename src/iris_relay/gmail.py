@@ -19,7 +19,6 @@ from oauth2client.file import Storage
 from oauth2client import client, tools
 # TODO(khrichar): figure out why keyring fails on OS X
 # from oauth2client.keyring_storage import Storage
-import itertools
 
 logger = getLogger(__name__)
 
@@ -27,6 +26,19 @@ logger = getLogger(__name__)
 email_headers_to_ignore = frozenset([('X-Autoreply', 'yes'),
                                      ('Auto-Submitted', 'auto-replied'),
                                      ('Precedence', 'bulk')])
+
+
+def is_pointless_messages(message):
+    payload = message.get('payload')
+    if not payload:
+        logger.warning('Payload not found in %s', message)
+        return False
+    for header in payload.get('headers', []):
+        key = (header.get('name'), header.get('value'))
+        if key in email_headers_to_ignore:
+            logger.warning('Filtering out message %s due to header combination %s: %s', message, *key)
+            return True
+    return False
 
 
 class Gmail(object):
@@ -43,6 +55,8 @@ class Gmail(object):
             proxy_info = None
         self.http = Http(proxy_info=proxy_info)
         self.var_dir = self.config['var_dir']
+        if not exists(self.var_dir):
+            makedirs(self.var_dir)
         self.history_id_f = join(self.var_dir, 'gmail_last_history_id')
         if exists(self.history_id_f):
             with open(self.history_id_f) as fh:
@@ -361,11 +375,10 @@ class Gmail(object):
         try:
             response = self.client.users().messages().list(userId=user_id,
                                                            q=query).execute()
-            kill_ids = set()
-            msg_ids = set()
             if 'messages' in response:
-                msg_ids.update(m['id'] for m in response['messages'])
-                kill_ids.update(m['id'] for m in itertools.ifilterfalse(self.filter_pointless_messages, response['messages']))
+                msg_ids = [m['id'] for m in response['messages']]
+            else:
+                msg_ids = []
 
             while 'nextPageToken' in response:
                 page_token = response['nextPageToken']
@@ -378,15 +391,19 @@ class Gmail(object):
                     logger.error('no messages key found in gmail response: %s',
                                  response)
                     continue
-                msg_ids.update(m['id'] for m in response['messages'])
-                kill_ids.update(m['id'] for m in itertools.ifilterfalse(self.filter_pointless_messages, response['messages']))
+                msg_ids.extend([m['id'] for m in response['messages']])
 
-            for msg_id in msg_ids - kill_ids:
-                message = self.get_message(msg_id, user_id) or {}
+            kill_ids = []
+            for msg_id in msg_ids:
+                message = self.get_message(msg_id, user_id)
+                if is_pointless_messages(message):
+                    kill_ids.append(msg_id)
+                    continue  # just mark as read and skip
                 for headers, content in self.process_message(message):
                     yield msg_id, headers, content
 
             if kill_ids:
+                logger.info('Skipping and marking %s as read.', kill_ids)
                 self.batch_mark_read(kill_ids)
         except (socks.HTTPError, errors.HttpError) as error:
             logger.error('An error occurred: %s' % error)
@@ -426,19 +443,6 @@ class Gmail(object):
     def parse_gmail_push_data(data):
         notification = loads(urlsafe_b64decode(str(data)))
         return notification.get('emailAddress'), notification.get('historyId')
-
-    @staticmethod
-    def filter_pointless_messages(message):
-        payload = message.get('payload')
-        if not payload:
-            logger.warning('Payload not found in %s', message)
-            return True
-        for header in payload.get('headers', []):
-            key = (header.get('name'), header.get('value'))
-            if key in email_headers_to_ignore:
-                logger.warning('Filtering out message %s due to header combination %s: %s', message, *key)
-                return False
-        return True
 
     def batch_mark_read(self, message_ids, user_id='me'):
         """Mark multiple message IDs as read (remove UNREAD label)
