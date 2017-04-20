@@ -594,17 +594,20 @@ def read_config_from_argv():
 
 def get_relay_app(config=None):
     basicConfig(format='[%(asctime)s] [%(process)d] [%(levelname)s] %(name)s %(message)s',
-                level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S %z')
+                level=logging.INFO,
+                datefmt='%Y-%m-%d %H:%M:%S %z')
 
     if not config:
         config = read_config_from_argv()
 
     iclient = IrisClient(config['iris']['host'],
                          config['iris']['port'],
-                         'iris-relay', config['iris']['api_key'])
+                         config['iris'].get('relay_app_name', 'iris-relay'),
+                         config['iris']['api_key'])
     gmail = Gmail(config.get('gmail'), config.get('proxy'))
 
-    # Note that ReqBodyMiddleware must be run before AuthMiddleware, since authentication uses the post body
+    # Note that ReqBodyMiddleware must be run before AuthMiddleware, since
+    # authentication uses the post body
     app = falcon.API(middleware=[ReqBodyMiddleware(), AuthMiddleware(config)])
 
     gmail_relay = GmailRelay(config, iclient, gmail)
@@ -618,22 +621,21 @@ def get_relay_app(config=None):
     twilio_delivery_status = TwilioDeliveryStatus(config, iclient)
     healthcheck = Healthcheck(config.get('healthcheck_path'))
 
-    version = 0
-    app.add_route('/api/v%d/gmail/relay' % version, gmail_relay)
-    app.add_route('/api/v%d/gmail-oneclick/relay' % version, gmail_oneclick_relay)
-    app.add_route('/api/v%d/twilio/calls/say' % version, twilio_calls_say)
-    app.add_route('/api/v%d/twilio/calls/gather' % version, twilio_calls_gather)
-    app.add_route('/api/v%d/twilio/calls/relay' % version, twilio_calls_relay)
-    app.add_route('/api/v%d/twilio/messages/relay' % version, twilio_messages_relay)
-    app.add_route('/api/v%d/twilio/status' % version, twilio_delivery_status)
-    app.add_route('/api/v%d/slack/authenticate' % version, slack_authenticate)
-    app.add_route('/api/v%d/slack/messages/relay' % version, slack_messages_relay)
+    app.add_route('/api/v0/gmail/relay', gmail_relay)
+    app.add_route('/api/v0/gmail-oneclick/relay', gmail_oneclick_relay)
+    app.add_route('/api/v0/twilio/calls/say', twilio_calls_say)
+    app.add_route('/api/v0/twilio/calls/gather', twilio_calls_gather)
+    app.add_route('/api/v0/twilio/calls/relay', twilio_calls_relay)
+    app.add_route('/api/v0/twilio/messages/relay', twilio_messages_relay)
+    app.add_route('/api/v0/twilio/status', twilio_delivery_status)
+    app.add_route('/api/v0/slack/authenticate', slack_authenticate)
+    app.add_route('/api/v0/slack/messages/relay', slack_messages_relay)
+    # TODO: remove /health
     app.add_route('/health', healthcheck)
     app.add_route('/healthcheck', healthcheck)
     if 'verification_code' in config['gmail']:
         vcode = config['gmail']['verification_code']
-        gmail_verify = GmailVerification(vcode)
-        app.add_route('/' + vcode, gmail_verify)
+        app.add_route('/' + vcode, GmailVerification(vcode))
 
     return app
 

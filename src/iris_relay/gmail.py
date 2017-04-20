@@ -137,7 +137,7 @@ class Gmail(object):
         except (socks.HTTPError, errors.HttpError) as error:
             logger.error('An error occurred: %s', error)
         else:
-            logger.info('Message snippet: %s', ret.get('snippet', ''))
+            logger.info('Message snippet: %s', ret.get('snippet'))
         return ret
 
     @staticmethod
