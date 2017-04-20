@@ -4,11 +4,17 @@ serve:
 			iris_relay.wrappers.gunicorn:application
 
 e2e:
-	python ./tests/e2e.py
+	py.test ./test/e2etest.py
 
 unit:
-	python ./tests/unit.py
+	py.test ./test
 
 test:
 	make unit
 	make e2e
+
+check:
+	flake8 src test
+	make test
+
+.PHONY: test
