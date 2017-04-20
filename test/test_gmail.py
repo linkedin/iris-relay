@@ -1,7 +1,7 @@
-from iris_relay.gmail import Gmail
+from iris_relay.gmail import is_pointless_messages
 
 
-def test_filter_pointless_messages():
+def test_is_pointless_messages():
     bad_message = {
       'payload': {'headers': [
           {
@@ -35,8 +35,8 @@ def test_filter_pointless_messages():
 
     missing_info_message = {}
 
-    assert not Gmail.filter_pointless_messages(bad_message)
-    assert not Gmail.filter_pointless_messages(bad_message2)
+    assert is_pointless_messages(bad_message)
+    assert is_pointless_messages(bad_message2)
 
-    assert Gmail.filter_pointless_messages(good_message)
-    assert Gmail.filter_pointless_messages(missing_info_message)
+    assert not is_pointless_messages(good_message)
+    assert not is_pointless_messages(missing_info_message)
