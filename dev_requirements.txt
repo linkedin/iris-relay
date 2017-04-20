@@ -2,3 +2,5 @@ gunicorn
 pytest
 requests
 flake8
+Sphinx
+sphinxcontrib-httpdomain

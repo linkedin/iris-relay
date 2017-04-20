@@ -1,3 +1,6 @@
+[![Build Status](https://travis-ci.org/linkedin/iris-relay.svg?branch=master)](https://travis-ci.org/linkedin/iris-relay)
+[![License](https://img.shields.io/badge/License-BSD%202--Clause-orange.svg)](https://opensource.org/licenses/BSD-2-Clause)
+
 Iris relay
 ==========
 
@@ -19,7 +22,17 @@ Tests
 Run tests:
 
 ```bash
-make test  # all tests, e2e + unit
-make e2e  # e2e tests
 make unit  # unit tests
+make e2e  # e2e tests
+make test  # all tests, e2e + unit
+```
+
+NOTE: e2e tests requires a running API instance. You can tweak the api host,
+port and key setting in `configs/config.dev.yaml`.
+
+Generate test coverage reports:
+
+```bash
+make e2e-cov
+make unit-cov
 ```

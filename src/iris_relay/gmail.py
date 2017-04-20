@@ -507,7 +507,7 @@ class Gmail(object):
                     # renew history_id, still raise error so we can notify gmail
                     # to retry
                     logger.error('Invalid saved last history id: %d, renewing to %s' % (last_history_id, history_id))
-                    self.save_last_history_id(int(history_id)-100)
+                    self.save_last_history_id(int(history_id) - 100)
                 raise error
             else:
                 msg_ids = set()
