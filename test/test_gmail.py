@@ -3,34 +3,32 @@ from iris_relay.gmail import is_pointless_messages
 
 def test_is_pointless_messages():
     bad_message = {
-      'payload': {'headers': [
-          {
-            'name': 'X-Autoreply',
-            'value': 'yes'
-          }
-      ]}
+        'payload': {
+            'headers': [{
+                'name': 'X-Autoreply',
+                'value': 'yes'
+            }]
+        }
     }
 
     bad_message2 = {
-      'payload': {'headers': [
-          {
-            'name': 'Auto-Submitted',
-            'value': 'auto-replied'
-          },
-          {
-            'name': 'Precedence',
-            'value': 'bulk'
-          }
-      ]}
+        'payload': {'headers': [
+            {
+                'name': 'Auto-Submitted',
+                'value': 'auto-replied'
+            },
+            {
+                'name': 'Precedence',
+                'value': 'bulk'
+            }
+        ]}
     }
 
     good_message = {
-      'payload': {'headers': [
-          {
+        'payload': {'headers': [{
             'name': 'From',
             'value': 'Foo Bar <foo@bar.com>'
-          }
-      ]}
+        }]}
     }
 
     missing_info_message = {}

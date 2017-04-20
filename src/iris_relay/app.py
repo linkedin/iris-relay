@@ -273,7 +273,8 @@ class TwilioCallsGather(object):
         loop = req.get_param('loop')
 
         if not message_id.isdigit() and not uuid4hex.match(message_id):
-            raise falcon.HTTPBadRequest('Bad message id', 'message id must be int/hex')
+            raise falcon.HTTPBadRequest('Bad message id',
+                                        'message id must be int/hex')
 
         action = self.get_api_url(req.env, 'v0', 'twilio/calls/relay?') + urlencode({
             'message_id': message_id,

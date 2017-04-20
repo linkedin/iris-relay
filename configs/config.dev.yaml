@@ -37,3 +37,4 @@ gmail:
   verification_code: googleabcdefg.html
   token: lbbc1797daaaaaaavaa6d3f0aad45e66
 gmail_one_click_url_key: 'foo'
+healthcheck_path: /tmp/relay_health
