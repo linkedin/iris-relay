@@ -269,18 +269,15 @@ class TwilioCallsGather(object):
         """
         content = req.get_param('content', required=True)
         instruction = req.get_param('instruction', required=True)
-        message_id = req.get_param('message_id')
+        message_id = req.get_param('message_id', required=True)
         loop = req.get_param('loop')
 
-        if message_id:
-            if not message_id.isdigit() and not uuid4hex.match(message_id):
-                raise falcon.HTTPBadRequest('Bad message id', 'message id must be int/hex')
+        if not message_id.isdigit() and not uuid4hex.match(message_id):
+            raise falcon.HTTPBadRequest('Bad message id', 'message id must be int/hex')
 
-            action = self.get_api_url(req.env, 'v0', 'twilio/calls/relay?') + urlencode({
-                'message_id': message_id,
-            })
-        else:
-            action = self.get_api_url(req.env, 'v0', 'twilio/calls/relay')
+        action = self.get_api_url(req.env, 'v0', 'twilio/calls/relay?') + urlencode({
+            'message_id': message_id,
+        })
 
         r = twiml.Response()
         if req.get_param('AnsweredBy') == 'machine':
@@ -288,15 +285,13 @@ class TwilioCallsGather(object):
             r.say(content, voice='alice', language="en-US", loop=loop)
         else:
             r.pause(length=2)
-            if message_id:
-                r.say('Press pound for menu.', voice='alice', language="en-US")
+            r.say('Press pound for menu.', voice='alice', language="en-US")
 
-            with r.gather(timeout=0, finishOnKey="#", action=action) as g:
+            with r.gather(timeout=0, finishOnKey="#") as g:
                 g.say(content, voice='alice', language="en-US")
 
-            if message_id:
-                with r.gather(numDigits=1, action=action) as g:
-                    g.say(instruction, voice='alice', loop=loop, language="en-US")
+            with r.gather(numDigits=1, action=action) as g:
+                g.say(instruction, voice='alice', loop=loop, language="en-US")
 
         resp.status = falcon.HTTP_200
         resp.body = str(r)
