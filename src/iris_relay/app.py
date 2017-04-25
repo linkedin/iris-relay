@@ -626,8 +626,6 @@ def get_relay_app(config=None):
     app.add_route('/api/v0/twilio/status', twilio_delivery_status)
     app.add_route('/api/v0/slack/authenticate', slack_authenticate)
     app.add_route('/api/v0/slack/messages/relay', slack_messages_relay)
-    # TODO: remove /health
-    app.add_route('/health', healthcheck)
     app.add_route('/healthcheck', healthcheck)
     if 'verification_code' in config['gmail']:
         vcode = config['gmail']['verification_code']
