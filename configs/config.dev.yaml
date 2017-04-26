@@ -10,7 +10,7 @@ twilio:
   remote_host: 'localhost:11648'
   auth_token: 'foobar'
 slack:
-  auth_token: 'foo'
+  verification_token: 'foo'
   response_text: 'Alert claimed.'
 iris:
   host: 'localhost'
