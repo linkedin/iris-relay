@@ -413,7 +413,7 @@ class SlackMessagesRelay(object):
     def __init__(self, config, iclient):
         self.config = config
         self.iclient = iclient
-        self.verification_token = self.config['slack']['auth_token']
+        self.verification_token = self.config['slack']['verification_token']
 
     def valid_token(self, token):
         return equals(self.verification_token, token)
