@@ -5,7 +5,7 @@ server:
   enable_basic_auth: False
   basic_auth:
     iris_twilio_user: 'barbaz'
-  lb_routing_path: '/iris-relay'
+  lb_routing_path: ''
 twilio:
   remote_host: 'localhost:11648'
   auth_token: 'foobar'
