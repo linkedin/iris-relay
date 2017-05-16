@@ -26,5 +26,9 @@ setuptools.setup(
         'falcon==1.1.0',
         'ujson==1.35',
     ],
-    entry_points={}
+    entry_points={
+        'console_scripts': [
+            'iris-relay-dev = iris_relay.bin.run_server:main'
+        ]
+    }
 )

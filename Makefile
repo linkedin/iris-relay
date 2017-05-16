@@ -1,7 +1,5 @@
 serve:
-	gunicorn --reload --access-logfile=- -b '0.0.0.0:16648' --worker-class gevent \
-	        -e CONFIG=./configs/config.dev.yaml \
-			iris_relay.wrappers.gunicorn:application
+	iris-relay-dev ./configs/config.dev.yaml
 
 e2e:
 	py.test -vv ./test/e2etest.py
