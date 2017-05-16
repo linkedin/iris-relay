@@ -486,7 +486,6 @@ class Healthcheck(object):
             with open(self.healthcheck_path) as f:
                 health = f.readline().strip()
         except IOError:
-            logger.exception('Failed reading healthcheck file')
             raise falcon.HTTPNotFound()
 
         resp.status = falcon.HTTP_200
