@@ -5,7 +5,6 @@
 # from ast import literal_eval
 from base64 import urlsafe_b64decode
 from email import message_from_string
-# from getpass import getuser
 from logging import getLogger
 from os import makedirs
 from os.path import exists, join
@@ -39,6 +38,41 @@ def is_pointless_messages(message):
             logger.warning('Filtering out message %s due to header combination %s: %s', message, *key)
             return True
     return False
+
+
+def process_message(message):
+    """Process message to yield body and sender.
+
+    :param message:
+    :return: message body and sender
+    :rtype: tuple(str, str)
+    """
+    payload = message.get('payload', {})
+    headers = payload.get('headers', [])
+    if 'data' in payload.get('body', {}):
+        parts = [payload]
+    else:
+        parts = payload.get('parts', [])
+
+    for part in parts:
+        # TODO(khrichar): support other content types
+        mime_type = part.get('mimeType')
+        if mime_type == 'text/plain':
+            content = urlsafe_b64decode(str(part.get('body', {}).get('data', '')))
+            yield headers, content
+        elif mime_type == 'text/html':
+            logger.debug('ignore html mime type for message: %s', message)
+        elif mime_type == 'multipart/alternative':
+            fake_message = {
+                'payload': {
+                    'parts': part.get('parts', []),
+                    'headers': part.get('headers', {}),
+                }
+            }
+            for h, c in process_message(fake_message):
+                yield h, c
+        else:
+            logger.info('skip parsing mime type %s for message: %s', mime_type, message)
 
 
 class Gmail(object):
@@ -399,8 +433,12 @@ class Gmail(object):
                 if is_pointless_messages(message):
                     kill_ids.append(msg_id)
                     continue  # just mark as read and skip
-                for headers, content in self.process_message(message):
+                is_email_processed = False
+                for headers, content in process_message(message):
+                    is_email_processed = True
                     yield msg_id, headers, content
+                if not is_email_processed:
+                    kill_ids.append(msg_id)
 
             if kill_ids:
                 logger.info('Skipping and marking %s as read.', kill_ids)
@@ -412,32 +450,6 @@ class Gmail(object):
         """list all the unread messages"""
         for i, h, c in self.list_message('in:inbox is:unread'):
             yield i, h, c
-
-    @staticmethod
-    def process_message(
-            message):
-        """Process message to yield body and sender.
-
-        :param message:
-        :return: message body and sender
-        :rtype: tuple(str, str)
-        """
-        label_ids = message.get('labelIds', [])
-        if 'INBOX' in label_ids and 'UNREAD' in label_ids:
-            payload = message.get('payload', {})
-            headers = payload.get('headers', [])
-            # TODO(khrichar): there has to be a better way
-            # source = [i.get('value') for i in headers if i.get('name') == 'From'][0]
-            if 'data' in payload.get('body', {}):
-                parts = [payload]
-            else:
-                parts = payload.get('parts', [])
-            for part in parts:
-                # TODO(khrichar): support other content types
-                if part.get('mimeType') == 'text/plain':
-                    content = urlsafe_b64decode(
-                        str(part.get('body').get('data')))
-                    yield headers, content
 
     @staticmethod
     def parse_gmail_push_data(data):
@@ -528,7 +540,7 @@ class Gmail(object):
                     # )
                     # TODO(khrichar): comment to switch to batch requests
                     message = self.get_message(msg_id, user_id) or {}
-                    for headers, content in self.process_message(message):
+                    for headers, content in process_message(message):
                         yield msg_id, headers, content
                 # try:
                 #     batch.execute(http=self.http)
