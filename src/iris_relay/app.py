@@ -127,7 +127,7 @@ class GmailRelay(object):
         ):
             raise falcon.HTTPBadRequest('Bad Request', 'Incorrect subscription')
 
-        endpoint = self.config['iris']['hook']['gmail']
+        gmail_endpoint = self.config['iris']['hook']['gmail']
         data = body.get('message', {}).get('data')
 
         results = []
@@ -135,7 +135,7 @@ class GmailRelay(object):
         for msg_id_gmail, headers, body in self.gmail.list_unread_message():
             data = ujson.dumps({'body': body, 'headers': headers})
             try:
-                result = self.iclient.post(endpoint, data, raw=True)
+                result = self.iclient.post(gmail_endpoint, data, raw=True)
             except MaxRetryError as ex:
                 logger.error(ex.reason)
             else:
@@ -160,7 +160,8 @@ class GmailRelay(object):
             raise falcon.HTTPBadRequest('Bad Request', '')
         else:
             # TODO(khrichar): reply with error to gmail sender
-            raise falcon.HTTPInternalServerError('Internal Server Error', 'Unknown response from API')
+            raise falcon.HTTPInternalServerError(
+                'Internal Server Error', 'Unknown response from API')
 
 
 class GmailOneClickRelay(object):
