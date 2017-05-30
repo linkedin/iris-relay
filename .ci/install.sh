@@ -28,12 +28,10 @@ echo "[*] spin up mysql..."
 bash ${CI_DIR}/run_mysql_docker.sh
 
 echo "[*] install iris-relay dependencies..."
-pushd ${TRAVIS_BUILD_DIR}
-	echo "[*] installing app dependencies..."
-	travis_retry python setup.py develop
-	echo "[*] pip installing dev_requirements.txt..."
-	travis_retry pip install -r dev_requirements.txt
-popd
+echo "[*] installing app dependencies..."
+travis_retry python setup.py develop
+echo "[*] pip installing dev_requirements.txt..."
+travis_retry pip install -r dev_requirements.txt
 
 echo "[*] spin up iris api..."
 docker run -d -p 16649:16649 \
