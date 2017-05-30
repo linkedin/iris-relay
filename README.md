@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/linkedin/iris-relay.svg?branch=master)](https://travis-ci.org/linkedin/iris-relay)
+[![Build Status](https://circleci.com/gh/linkedin/iris-relay.svg?style=shield)](https://circleci.com/gh/linkedin/iris-relay)
 [![License](https://img.shields.io/badge/License-BSD%202--Clause-orange.svg)](https://opensource.org/licenses/BSD-2-Clause)
 
 Iris relay
