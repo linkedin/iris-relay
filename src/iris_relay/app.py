@@ -422,7 +422,8 @@ class SlackMessagesRelay(object):
     def return_slack_message(self, resp, text):
         resp.status = falcon.HTTP_200
         resp.content_type = 'application/json'
-        resp.body = ujson.dumps({'text': text})
+        resp.body = ujson.dumps({'text': text,
+                                 'replace_original': False})
 
     def on_post(self, req, resp):
         """
