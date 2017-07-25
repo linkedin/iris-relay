@@ -15,8 +15,9 @@ setuptools.setup(
         'PyOpenSSL==0.15.1',
         'PyYAML==3.11',
         'gevent==1.1.2',
-        'google-api-python-client==1.6.2',
-        'oauth2client==4.1.1',
+        # TODO: update google client
+        'google-api-python-client==1.4.2',
+        'oauth2client==1.4.12',
         'simplejson==3.8.1',
         'slackclient',
         'streql==3.0.2',
