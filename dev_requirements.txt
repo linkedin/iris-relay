@@ -4,3 +4,5 @@ requests
 flake8
 Sphinx
 sphinxcontrib-httpdomain
+SQLAlchemy
+PyMySQL

@@ -23,6 +23,11 @@ iris:
     twilio_messages: 'response/twilio/messages'
     twilio_status: 'twilio/deliveryupdate'
     slack: 'response/slack'
+iris-mobile:
+  activated: True
+  host: 'localhost'
+  port: 5000
+  api_key: 'abc'
 gmail:
   project: iris-1234
   push_endpoint: https://www.fooo.bar/iris-relay/api/v0/gmail/relay
@@ -38,3 +43,15 @@ gmail:
   token: lbbc1797daaaaaaavaa6d3f0aad45e66
 gmail_one_click_url_key: 'foo'
 healthcheck_path: /tmp/relay_health
+db:
+  conn:
+    kwargs:
+      scheme: mysql+pymysql
+      user: root
+      host: 127.0.0.1
+      database: 'iris'
+      charset: utf8
+      echo: True
+    str: "%(scheme)s://%(user)s@%(host)s/%(database)s?charset=%(charset)s"
+  kwargs:
+    pool_recycle: 3600
