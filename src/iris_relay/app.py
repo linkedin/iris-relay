@@ -3,6 +3,8 @@
 
 
 import hmac
+import time
+import hashlib
 import re
 from base64 import b64encode, decodestring, urlsafe_b64encode
 from hashlib import sha1, sha512
@@ -10,6 +12,7 @@ from logging import basicConfig, getLogger
 import logging
 from urllib import unquote_plus, urlencode, unquote
 
+from . import db
 from streql import equals
 from twilio import twiml
 from urllib3.exceptions import MaxRetryError
@@ -505,11 +508,44 @@ class GmailVerification(object):
         resp.body = self.msg
 
 
+class MobileSink(object):
+
+    def __init__(self, mobile_client):
+        self.mobile_client = mobile_client
+
+    def __call__(self, req, resp):
+        path = '/'.join(req.path.split('/')[4:])
+        if req.query_string:
+            path += '?%s' % req.query_string
+        try:
+            if req.method == 'POST':
+                body = ''
+                if req.context['body']:
+                    body = ujson.loads(req.context['body'])
+                result = self.mobile_client.post(path, body)
+            elif req.method == 'GET':
+                result = self.mobile_client.get(path)
+            else:
+                raise falcon.HTTPMethodNotAllowed()
+        except MaxRetryError as e:
+                logger.error(e.reason)
+                raise falcon.HTTPInternalServerError('Internal Server Error', 'Max retry error, api unavailable')
+        if result.status == 400:
+            raise falcon.HTTPBadRequest('Bad Request', '')
+        elif str(result.status)[0] != '2':
+            raise falcon.HTTPInternalServerError('Internal Server Error', 'Unknown response from the api')
+        else:
+            resp.status = falcon.HTTP_200
+            resp.content_type = result.headers['Content-Type']
+            resp.body = result.data
+
+
 class AuthMiddleware(object):
 
     def __init__(self, config):
         self.config = config
         self.basic_auth = config['server']['basic_auth']
+        self.mobile = config.get('iris-mobile', {}).get('activated', False)
         token = config['twilio']['auth_token']
         if isinstance(token, list):
             self.twilio_auth_token = token
@@ -555,6 +591,42 @@ class AuthMiddleware(object):
                                        sig, expected_sigs)
                         raise falcon.HTTPUnauthorized('Access denied', 'Twilio auth failure', [])
                     return
+                elif self.mobile and segments[2] == 'mobile':
+                    return
+                    # Otherwise, username specified in X-IRIS-USERNAME
+                    user = req.get_header('X-IRIS-USERNAME', required=True)
+                    # get key for username
+                    conn = db.connect()
+                    cursor = conn.cursor()
+                    cursor.execute('''SELECT mobile_key FROM user
+                                      WHERE `target_id` = (SELECT `id` FROM `target` WHERE `name` = %s
+                                        AND `type_id` = (SELECT `id` FROM `target_type` WHERE `name` = 'user' AND `active` = TRUE))''',
+                                   user)
+                    row = cursor.fetchone()
+                    conn.close()
+                    # make sure that there exists a row for the corresponding username
+                    if not row:
+                        raise falcon.HTTPUnauthorized('Authentication failure')
+                    key = str(row[0])
+                    method = req.method
+                    auth = req.get_header('Authorization', required=True)
+                    client_digest = auth[5:]
+                    body = req.context['body']
+                    # Strip /api/v0/mobile from path
+                    path = req.env['PATH_INFO'][14:]
+                    qs = req.env['QUERY_STRING']
+                    if qs:
+                        path = path + '?' + qs
+                    window = int(time.time()) // 90
+                    text = '%s %s %s %s' % (window, method, path, body)
+
+                    HMAC = hmac.new(key, text, hashlib.sha512)
+                    digest = urlsafe_b64encode(HMAC.digest())
+
+                    if hmac.compare_digest(client_digest, digest):
+                        return
+                    else:
+                        raise falcon.HTTPUnauthorized('Authentication failure: server')
                 elif segments[2] == 'gmail' or segments[2] == 'gmail-oneclick' or segments[2] == 'slack':
                     return
         elif len(segments) == 1:
@@ -628,6 +700,17 @@ def get_relay_app(config=None):
     app.add_route('/api/v0/slack/authenticate', slack_authenticate)
     app.add_route('/api/v0/slack/messages/relay', slack_messages_relay)
     app.add_route('/healthcheck', healthcheck)
+    mobile = config.get('iris-mobile', {}).get('activated', False)
+    if mobile:
+        db.init(config['db'])
+        mobile_client = IrisClient(config['iris-mobile']['host'],
+                                   config['iris-mobile']['port'],
+                                   config['iris-mobile'].get('relay_app_name', 'iris-relay'),
+                                   config['iris-mobile']['api_key'],
+                                   version=None)
+        mobile_sink = MobileSink(mobile_client)
+        app.add_sink(mobile_sink, prefix='/api/v0/mobile/')
+
     if 'verification_code' in config['gmail']:
         vcode = config['gmail']['verification_code']
         app.add_route('/' + vcode, GmailVerification(vcode))
