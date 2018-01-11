@@ -55,3 +55,14 @@ db:
     str: "%(scheme)s://%(user)s@%(host)s/%(database)s?charset=%(charset)s"
   kwargs:
     pool_recycle: 3600
+
+saml:
+  metadata_url_for:
+    sso: 'https://sso.com'
+  acs_format: 'https://hostname:16648/saml/sso/%s'
+  https_acs_format: 'https://hostname/saml/sso/%s'
+mobile_auth:
+  access_ttl: 28800
+  refresh_ttl: 604800
+  redirect_url: 'http://localhost:7000'
+  username_attr: samaccountname
