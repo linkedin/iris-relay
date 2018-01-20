@@ -510,6 +510,8 @@ class AuthMiddleware(object):
     def __init__(self, config):
         self.config = config
         self.basic_auth = config['server']['basic_auth']
+        self.mobile = config.get('iris-mobile', {}).get('activated', False)
+        self.time_window = config.get('mobile-auth', {}).get('time_window', 60)
         token = config['twilio']['auth_token']
         if isinstance(token, list):
             self.twilio_auth_token = token
@@ -555,6 +557,54 @@ class AuthMiddleware(object):
                                        sig, expected_sigs)
                         raise falcon.HTTPUnauthorized('Access denied', 'Twilio auth failure', [])
                     return
+                elif self.mobile and segments[2] == 'mobile':
+                    # Only allow refresh tokens for /refresh, only access for all else
+                    table = 'refresh_token' if segments[3] == 'refresh' else 'access_token'
+                    key_query = '''SELECT `key`, `target`.`name`
+                                   FROM `%s` JOIN `target` ON `user_id` = `target`.`id`
+                                   WHERE `%s`.`id` = %%s
+                                   AND `expiration` > %%s''' % (table, table)
+                    method = req.method
+                    auth = req.get_header('Authorization', required=True)
+
+                    items = urllib2.parse_http_list(auth)
+                    parts = urllib2.parse_keqv_list(items)
+
+                    if 'signature' not in parts or 'keyId' not in parts or 'timestamp' not in parts:
+                        raise falcon.HTTPUnauthorized('Authentication failure: invalid header')
+
+                    try:
+                        window = int(parts['timestamp'])
+                        time_diff = abs(time.time() - window)
+                    except ValueError:
+                        raise falcon.HTTPUnauthorized('Authentication failure: invalid header')
+                    client_digest = parts['signature']
+                    key_id = parts['keyId']
+                    body = req.context['body']
+                    path = req.env['PATH_INFO']
+                    qs = req.env['QUERY_STRING']
+                    if qs:
+                        path = path + '?' + qs
+                    text = '%s %s %s %s' % (window, method, path, body)
+
+                    conn = db.connect()
+                    cursor = conn.cursor()
+                    cursor.execute(key_query, (key_id, time.time()))
+                    row = cursor.fetchone()
+                    conn.close()
+                    # make sure that there exists a row for the corresponding username
+                    if row is None:
+                        raise falcon.HTTPUnauthorized('Authentication failure: server')
+                    key = str(row[0])
+                    req.context['user'] = row[1]
+
+                    HMAC = hmac.new(key, text, hashlib.sha512)
+                    digest = urlsafe_b64encode(HMAC.digest())
+
+                    if hmac.compare_digest(client_digest, digest) and time_diff < self.time_window:
+                        return
+                    else:
+                        raise falcon.HTTPUnauthorized('Authentication failure: server')
                 elif segments[2] == 'gmail' or segments[2] == 'gmail-oneclick' or segments[2] == 'slack':
                     return
         elif len(segments) == 1:
