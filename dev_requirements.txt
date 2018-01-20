@@ -4,3 +4,7 @@ requests
 flake8
 Sphinx
 sphinxcontrib-httpdomain
+SQLAlchemy
+PyMySQL
+pysaml2
+pyOpenSSL==16.2.0

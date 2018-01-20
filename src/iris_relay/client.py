@@ -17,10 +17,11 @@ class IrisClient(HTTPConnectionPool):
         self.version = version
         self.user = user
         self.HMAC = hmac.new(api_key, '', hashlib.sha512)
+        self.base_path = '/v%s/' % version if version is not None else '/'
 
     def post(self, endpoint, data, params=None, raw=False, headers=None):
         HMAC = self.HMAC.copy()
-        path = '/v%s/%s' % (self.version, endpoint)
+        path = self.base_path + endpoint
         method = 'POST'
         hdrs = {}
         window = int(time.time()) // 5
@@ -43,7 +44,7 @@ class IrisClient(HTTPConnectionPool):
 
     def get(self, endpoint, params=None, raw=False):
         HMAC = self.HMAC.copy()
-        path = '/v%s/%s' % (self.version, endpoint)
+        path = self.base_path + endpoint
         method = 'GET'
         window = int(time.time()) // 5
         body = ''

@@ -3,13 +3,17 @@
 
 
 import hmac
+import time
+import hashlib
 import re
 from base64 import b64encode, decodestring, urlsafe_b64encode
 from hashlib import sha1, sha512
 from logging import basicConfig, getLogger
 import logging
 from urllib import unquote_plus, urlencode, unquote
+import urllib2
 
+from . import db
 from streql import equals
 from twilio import twiml
 from urllib3.exceptions import MaxRetryError
@@ -17,9 +21,12 @@ import yaml
 import falcon
 import ujson
 import falcon.uri
+import os
+from saml2 import entity
 
 from iris_relay.client import IrisClient
 from iris_relay.gmail import Gmail
+from iris_relay.saml import SAML
 
 logger = getLogger(__name__)
 
@@ -64,6 +71,101 @@ def compute_signature(token, uri, post_body, utf=False):
         computed = computed.decode('utf-8')
 
     return computed.strip()
+
+
+class IDPInitiated(object):
+    def __init__(self, config, saml_manager):
+        self.saml_manager = saml_manager
+        self.access_ttl = config['access_ttl']
+        self.refresh_ttl = config['refresh_ttl']
+        self.redirect_url = config['redirect_url']
+        self.username_attr = config['username_attr']
+
+    def on_post(self, req, resp, idp_name):
+        saml_client = self.saml_manager.saml_client_for(idp_name)
+        form_data = falcon.uri.parse_query_string(req.context['body'])
+
+        authn_response = saml_client.parse_authn_request_response(
+            form_data['SAMLResponse'],
+            entity.BINDING_HTTP_POST)
+        username = authn_response.ava[self.username_attr][0]
+        refresh_token = hashlib.sha256(os.urandom(32)).hexdigest()
+        exp = time.time() + self.refresh_ttl
+        connection = db.connect()
+        cursor = connection.cursor()
+        try:
+            cursor.execute('''INSERT INTO `refresh_token` (`user_id`, `key`, `expiration`)
+                              VALUES ((SELECT `id` FROM `target` WHERE `name` = %s AND `type_id` =
+                                        (SELECT `id` FROM `target_type` WHERE `name` = 'user')),
+                                      %s,
+                                      %s)
+                              ''',
+                           (username, refresh_token, exp))
+            connection.commit()
+            key_id = cursor.lastrowid
+        finally:
+            cursor.close()
+            connection.close()
+        location = form_data.get('RelayState', self.redirect_url)
+        resp.set_header('Location', ''.join([location, '#token=', refresh_token,
+                                             '&keyId=', str(key_id), '&expiry=', str(exp),
+                                             '&username=', username]))
+        resp.status = falcon.HTTP_302
+
+
+class TokenRefresh(object):
+
+    def __init__(self, config):
+        self.access_ttl = config['access_ttl']
+
+    def on_get(self, req, resp):
+        # Username verified in auth middleware
+        username = req.context['user']
+        access_token = hashlib.sha256(os.urandom(32)).hexdigest()
+        exp = time.time() + self.access_ttl
+
+        connection = db.connect()
+        cursor = connection.cursor()
+        try:
+            cursor.execute('''INSERT INTO `access_token` (`user_id`, `key`, `expiration`)
+                              VALUES ((SELECT `id` FROM `target` WHERE `name` = %s AND `type_id` =
+                                      (SELECT `id` FROM `target_type` WHERE `name` = 'user')),
+                                      %s,
+                                      %s)''',
+                           (username, access_token, exp))
+            connection.commit()
+            key_id = cursor.lastrowid
+        finally:
+            cursor.close()
+            connection.close()
+
+        resp.body = ujson.dumps({'token': access_token, 'key_id': key_id, 'expiry': exp})
+
+
+class SPInitiated(object):
+    def __init__(self, saml_manager):
+        self.saml_manager = saml_manager
+
+    def on_get(self, req, resp, idp_name):
+        saml_client = self.saml_manager.saml_client_for(idp_name)
+        reqid, info = saml_client.prepare_for_authenticate()
+
+        redirect_url = None
+        # Select the IdP URL to send the AuthN request to
+        for key, value in info['headers']:
+            if key is 'Location':
+                redirect_url = value
+        # NOTE:
+        #   I realize I _technically_ don't need to set Cache-Control or Pragma:
+        #     http://stackoverflow.com/a/5494469
+        #   However, Section 3.2.3.2 of the SAML spec suggests they are set:
+        #     http://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf
+        #   We set those headers here as a "belt and suspenders" approach,
+        #   since enterprise environments don't always conform to RFCs
+        resp.set_header('Cache-Control', 'no-cache, no-store')
+        resp.set_header('Pragma', 'no-cache')
+        resp.set_header('Location', redirect_url)
+        resp.status = falcon.HTTP_302
 
 
 class GmailRelay(object):
@@ -505,6 +607,38 @@ class GmailVerification(object):
         resp.body = self.msg
 
 
+class MobileSink(object):
+
+    def __init__(self, mobile_client):
+        self.mobile_client = mobile_client
+
+    def __call__(self, req, resp):
+        path = '/'.join(req.path.split('/')[4:])
+        if req.query_string:
+            path += '?%s' % req.query_string
+        try:
+            if req.method == 'POST':
+                body = ''
+                if req.context['body']:
+                    body = ujson.loads(req.context['body'])
+                result = self.mobile_client.post(path, body)
+            elif req.method == 'GET':
+                result = self.mobile_client.get(path)
+            else:
+                raise falcon.HTTPMethodNotAllowed()
+        except MaxRetryError as e:
+                logger.error(e.reason)
+                raise falcon.HTTPInternalServerError('Internal Server Error', 'Max retry error, api unavailable')
+        if result.status == 400:
+            raise falcon.HTTPBadRequest('Bad Request', '')
+        elif str(result.status)[0] != '2':
+            raise falcon.HTTPInternalServerError('Internal Server Error', 'Unknown response from the api')
+        else:
+            resp.status = falcon.HTTP_200
+            resp.content_type = result.headers['Content-Type']
+            resp.body = result.data
+
+
 class AuthMiddleware(object):
 
     def __init__(self, config):
@@ -613,6 +747,8 @@ class AuthMiddleware(object):
             elif segments[0] == self.config['gmail'].get('verification_code'):
                 return
 
+        elif segments[0] == 'saml':
+            return
         raise falcon.HTTPUnauthorized('Access denied', 'Authentication failed', [])
 
 
@@ -652,6 +788,7 @@ def get_relay_app(config=None):
                          config['iris'].get('relay_app_name', 'iris-relay'),
                          config['iris']['api_key'])
     gmail = Gmail(config.get('gmail'), config.get('proxy'))
+    saml = SAML(config.get('saml'))
 
     # Note that ReqBodyMiddleware must be run before AuthMiddleware, since
     # authentication uses the post body
@@ -678,6 +815,20 @@ def get_relay_app(config=None):
     app.add_route('/api/v0/slack/authenticate', slack_authenticate)
     app.add_route('/api/v0/slack/messages/relay', slack_messages_relay)
     app.add_route('/healthcheck', healthcheck)
+    mobile = config.get('iris-mobile', {}).get('activated', False)
+    if mobile:
+        db.init(config['db'])
+        mobile_client = IrisClient(config['iris-mobile']['host'],
+                                   config['iris-mobile']['port'],
+                                   config['iris-mobile'].get('relay_app_name', 'iris-relay'),
+                                   config['iris-mobile']['api_key'],
+                                   version=None)
+        mobile_sink = MobileSink(mobile_client)
+        app.add_sink(mobile_sink, prefix='/api/v0/mobile/')
+        app.add_route('/saml/login/{idp_name}', SPInitiated(saml))
+        app.add_route('/saml/sso/{idp_name}', IDPInitiated(config.get('mobile_auth'), saml))
+        app.add_route('/api/v0/mobile/refresh', TokenRefresh(config.get('mobile_auth')))
+
     if 'verification_code' in config['gmail']:
         vcode = config['gmail']['verification_code']
         app.add_route('/' + vcode, GmailVerification(vcode))
