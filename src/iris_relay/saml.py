@@ -13,7 +13,8 @@ logger.setLevel('WARN')
 
 class SAML(object):
     def __init__(self, config):
-        self.metadata_url_for = config['metadata_url_for']
+        self.metadata_url_for = config.get('metadata_url_for', {})
+        self.metadata = config.get('metadata', {})
         self.acs_format = config['acs_format']
         self.https_acs_format = config['https_acs_format']
 
@@ -23,19 +24,20 @@ class SAML(object):
         The configuration is a hash for use by saml2.config.Config
         '''
 
-        if idp_name not in self.metadata_url_for:
+        if idp_name not in self.metadata_url_for and idp_name not in self.metadata:
             raise Exception("Settings for IDP '{}' not found".format(idp_name))
         acs_url = self.acs_format % idp_name
         https_acs_url = self.https_acs_format % idp_name
 
-        #   TODO: cache
-        #   SAML metadata changes very rarely. On a production system,
-        #   this data should be cached as approprate for your production system.
-        rv = requests.get(self.metadata_url_for[idp_name])
+        if self.metadata_url_for:
+            rv = requests.get(self.metadata_url_for[idp_name])
+            metadata = rv.text
+        else:
+            metadata = self.metadata[idp_name]
 
         settings = {
             'metadata': {
-                'inline': [rv.text],
+                'inline': [metadata],
             },
             'service': {
                 'sp': {
