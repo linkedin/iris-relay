@@ -79,7 +79,7 @@ class IDPInitiated(object):
         self.access_ttl = config['access_ttl']
         self.refresh_ttl = config['refresh_ttl']
         self.redirect_url = config['redirect_url']
-        self.username_attr = config['username_attr']
+        self.username_attr = config.get('username_attr')
 
     def on_post(self, req, resp, idp_name):
         saml_client = self.saml_manager.saml_client_for(idp_name)
@@ -88,7 +88,10 @@ class IDPInitiated(object):
         authn_response = saml_client.parse_authn_request_response(
             form_data['SAMLResponse'],
             entity.BINDING_HTTP_POST)
-        username = authn_response.ava[self.username_attr][0]
+        subject = authn_response.get_subject()
+        username = subject.text
+        if self.username_attr:
+            username = authn_response.ava[self.username_attr][0]
         refresh_token = hashlib.sha256(os.urandom(32)).hexdigest()
         exp = time.time() + self.refresh_ttl
         connection = db.connect()
