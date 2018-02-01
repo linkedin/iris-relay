@@ -642,6 +642,23 @@ class MobileSink(object):
             resp.body = result.data
 
 
+class RegisterDevice(object):
+
+    def __init__(self, iris_client):
+        self.iris = iris_client
+
+    def on_post(self, req, resp):
+        data = ujson.loads(req.context['body'])
+        data['username'] = req.context['user']
+        result = self.iris.post('devices', data)
+        if result.status == 400:
+            raise falcon.HTTPBadRequest('Bad Request', '')
+        elif result.status is not 201:
+            logger.error('Unknown response from API: %s: %s', result.status, result.data)
+            raise falcon.HTTPInternalServerError('Internal Server Error', 'Unknown response from the api')
+        resp.status = falcon.HTTP_201
+
+
 class AuthMiddleware(object):
 
     def __init__(self, config):
@@ -818,19 +835,20 @@ def get_relay_app(config=None):
     app.add_route('/api/v0/slack/authenticate', slack_authenticate)
     app.add_route('/api/v0/slack/messages/relay', slack_messages_relay)
     app.add_route('/healthcheck', healthcheck)
-    mobile = config.get('iris-mobile', {}).get('activated', False)
-    if mobile:
+    mobile_cfg = config.get('iris-mobile', {})
+    if mobile_cfg.get('activated'):
         db.init(config['db'])
-        mobile_client = IrisClient(config['iris-mobile']['host'],
-                                   config['iris-mobile']['port'],
-                                   config['iris-mobile'].get('relay_app_name', 'iris-relay'),
-                                   config['iris-mobile']['api_key'],
+        mobile_client = IrisClient(mobile_cfg['host'],
+                                   mobile_cfg['port'],
+                                   mobile_cfg.get('relay_app_name', 'iris-relay'),
+                                   mobile_cfg['api_key'],
                                    version=None)
         mobile_sink = MobileSink(mobile_client)
         app.add_sink(mobile_sink, prefix='/api/v0/mobile/')
         app.add_route('/saml/login/{idp_name}', SPInitiated(saml))
-        app.add_route('/saml/sso/{idp_name}', IDPInitiated(config.get('mobile_auth'), saml))
-        app.add_route('/api/v0/mobile/refresh', TokenRefresh(config.get('mobile_auth')))
+        app.add_route('/saml/sso/{idp_name}', IDPInitiated(mobile_cfg.get('auth'), saml))
+        app.add_route('/api/v0/mobile/refresh', TokenRefresh(mobile_cfg.get('auth')))
+        app.add_route('/api/v0/mobile/device', RegisterDevice(iclient))
 
     if 'verification_code' in config['gmail']:
         vcode = config['gmail']['verification_code']
