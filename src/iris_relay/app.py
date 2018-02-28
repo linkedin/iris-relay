@@ -8,6 +8,7 @@ import hashlib
 import re
 from base64 import b64encode, decodestring, urlsafe_b64encode
 from hashlib import sha1, sha512
+from cryptography.fernet import Fernet
 from logging import basicConfig, getLogger
 import logging
 from urllib import unquote_plus, urlencode, unquote
@@ -80,6 +81,7 @@ class IDPInitiated(object):
         self.refresh_ttl = config['refresh_ttl']
         self.redirect_url = config['redirect_url']
         self.username_attr = config.get('username_attr')
+        self.fernet = Fernet(config['key'])
 
     def on_post(self, req, resp, idp_name):
         saml_client = self.saml_manager.saml_client_for(idp_name)
@@ -93,6 +95,7 @@ class IDPInitiated(object):
         if self.username_attr:
             username = authn_response.ava[self.username_attr][0]
         refresh_token = hashlib.sha256(os.urandom(32)).hexdigest()
+        encrypted_token = self.fernet.encrypt(refresh_token)
         exp = time.time() + self.refresh_ttl
         connection = db.connect()
         cursor = connection.cursor()
@@ -103,7 +106,7 @@ class IDPInitiated(object):
                                       %s,
                                       %s)
                               ''',
-                           (username, refresh_token, exp))
+                           (username, encrypted_token, exp))
             connection.commit()
             key_id = cursor.lastrowid
         finally:
@@ -120,11 +123,13 @@ class TokenRefresh(object):
 
     def __init__(self, config):
         self.access_ttl = config['access_ttl']
+        self.fernet = Fernet(config['key'])
 
     def on_get(self, req, resp):
         # Username verified in auth middleware
         username = req.context['user']
         access_token = hashlib.sha256(os.urandom(32)).hexdigest()
+        encrypted_token = self.fernet.encrypt(access_token)
         exp = time.time() + self.access_ttl
 
         connection = db.connect()
@@ -135,7 +140,7 @@ class TokenRefresh(object):
                                       (SELECT `id` FROM `target_type` WHERE `name` = 'user')),
                                       %s,
                                       %s)''',
-                           (username, access_token, exp))
+                           (username, encrypted_token, exp))
             connection.commit()
             key_id = cursor.lastrowid
         finally:
@@ -664,8 +669,17 @@ class AuthMiddleware(object):
     def __init__(self, config):
         self.config = config
         self.basic_auth = config['server']['basic_auth']
-        self.mobile = config.get('iris-mobile', {}).get('activated', False)
-        self.time_window = config.get('mobile-auth', {}).get('time_window', 60)
+
+        mobile_cfg = config.get('iris-mobile', {})
+        self.mobile = mobile_cfg.get('activated', False)
+        if self.mobile:
+            mobile_auth = mobile_cfg['auth']
+            self.time_window = mobile_auth.get('time_window', 60)
+            self.fernet = Fernet(mobile_auth['key'])
+        else:
+            self.time_window = None
+            self.fernet = None
+
         token = config['twilio']['auth_token']
         if isinstance(token, list):
             self.twilio_auth_token = token
@@ -749,7 +763,7 @@ class AuthMiddleware(object):
                     # make sure that there exists a row for the corresponding username
                     if row is None:
                         raise falcon.HTTPUnauthorized('Authentication failure: server')
-                    key = str(row[0])
+                    key = self.fernet.decrypt(str(row[0]))
                     req.context['user'] = row[1]
 
                     HMAC = hmac.new(key, text, hashlib.sha512)
