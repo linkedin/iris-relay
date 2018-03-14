@@ -81,15 +81,22 @@ class IDPInitiated(object):
         self.refresh_ttl = config['refresh_ttl']
         self.redirect_url = config['redirect_url']
         self.username_attr = config.get('username_attr')
-        self.fernet = Fernet(config['key'])
+        self.fernet = Fernet(config['encrypt_key'])
 
     def on_post(self, req, resp, idp_name):
         saml_client = self.saml_manager.saml_client_for(idp_name)
         form_data = falcon.uri.parse_query_string(req.context['body'])
 
+        # Pysaml2 defaults to config-defined encryption keys, but must
+        # be passed a truthy dict in outstanding_certs in order to
+        # do so.
+        outstanding = {1: 1}
         authn_response = saml_client.parse_authn_request_response(
             form_data['SAMLResponse'],
-            entity.BINDING_HTTP_POST)
+            entity.BINDING_HTTP_POST,
+            outstanding_certs=outstanding)
+        req_id = authn_response.in_response_to
+        unsolicited = req_id is None
         subject = authn_response.get_subject()
         username = subject.text
         if self.username_attr:
@@ -100,6 +107,12 @@ class IDPInitiated(object):
         connection = db.connect()
         cursor = connection.cursor()
         try:
+            if not unsolicited:
+                cursor.execute('''DELETE FROM `saml_id` WHERE `id` = %s''', req_id)
+                if cursor.rowcount == 0:
+                    unsolicited = True
+            if unsolicited:
+                raise falcon.HTTPUnauthorized('Unsolicited request')
             cursor.execute('''INSERT INTO `refresh_token` (`user_id`, `key`, `expiration`)
                               VALUES ((SELECT `id` FROM `target` WHERE `name` = %s AND `type_id` =
                                         (SELECT `id` FROM `target_type` WHERE `name` = 'user')),
@@ -123,7 +136,7 @@ class TokenRefresh(object):
 
     def __init__(self, config):
         self.access_ttl = config['access_ttl']
-        self.fernet = Fernet(config['key'])
+        self.fernet = Fernet(config['encrypt_key'])
 
     def on_get(self, req, resp):
         # Username verified in auth middleware
@@ -157,6 +170,15 @@ class SPInitiated(object):
     def on_get(self, req, resp, idp_name):
         saml_client = self.saml_manager.saml_client_for(idp_name)
         reqid, info = saml_client.prepare_for_authenticate()
+        connection = db.connect()
+        cursor = connection.cursor()
+        try:
+            cursor.execute('INSERT INTO `saml_id` (`id`, `timestamp`) VALUES (%s, %s)',
+                           (reqid, int(time.time())))
+            connection.commit()
+        finally:
+            cursor.close()
+            connection.close()
 
         redirect_url = None
         # Select the IdP URL to send the AuthN request to
@@ -675,7 +697,7 @@ class AuthMiddleware(object):
         if self.mobile:
             mobile_auth = mobile_cfg['auth']
             self.time_window = mobile_auth.get('time_window', 60)
-            self.fernet = Fernet(mobile_auth['key'])
+            self.fernet = Fernet(mobile_auth['encrypt_key'])
         else:
             self.time_window = None
             self.fernet = None

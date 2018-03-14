@@ -13,9 +13,10 @@ slack:
   verification_token: 'foo'
   response_text: 'Alert claimed.'
 iris:
-  host: 'localhost'
+  relay_app_name: 'iris-mobile'
+  host: localhost
   port: 16649
-  api_key: 'foo'
+  api_key: 'key'
   hook:
     gmail: 'response/gmail'
     gmail_one_click: 'response/gmail-oneclick'
@@ -34,11 +35,8 @@ iris-mobile:
     refresh_ttl: 604800
     redirect_url: 'http://localhost:7000'
     username_attr: sAMAccountName
-saml:
-  metadata_url_for:
-    sso: 'https://sso.com'
-  acs_format: 'https://hostname:16648/saml/sso/%s'
-  https_acs_format: 'https://hostname/saml/sso/%s'
+    # Example key; change in production
+    encrypt_key: iizL8s_AqSBwZO-xzJ0bFt_kMSg6A8OsTAMON2gqpII=
 gmail:
   project: iris-1234
   push_endpoint: https://www.fooo.bar/iris-relay/api/v0/gmail/relay
@@ -66,3 +64,9 @@ db:
     str: "%(scheme)s://%(user)s@%(host)s/%(database)s?charset=%(charset)s"
   kwargs:
     pool_recycle: 3600
+
+saml:
+  metadata_url_for:
+    idp: 'https://www.metadata.com'
+  acs_format: 'http://host:16648/saml/sso/%s'
+  https_acs_format: 'https://host/saml/sso/%s'
