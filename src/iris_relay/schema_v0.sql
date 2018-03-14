@@ -17,3 +17,9 @@ CREATE TABLE IF NOT EXISTS `refresh_token` (
   KEY `refresh_user_idx` (`user_id`),
   CONSTRAINT `refresh_user_id_fk` FOREIGN KEY (`user_id`) REFERENCES `target` (`id`)
 );
+
+CREATE TABLE IF NOT EXISTS `saml_id` (
+  `id` VARCHAR(255) NOT NULL,
+  `timestamp` BIGINT(20) UNSIGNED NOT NULL,
+  PRIMARY KEY (`id`)
+);
