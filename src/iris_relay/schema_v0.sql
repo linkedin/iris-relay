@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS `access_token` (
   `id` BIGINT(20) NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) NOT NULL,
-  `key` varchar(64) NOT NULL UNIQUE,
+  `key` varchar(255) NOT NULL UNIQUE,
   `expiration` BIGINT(20) UNSIGNED NOT NULL,
   PRIMARY KEY (`id`),
   KEY `access_user_idx` (`user_id`),
@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS `access_token` (
 CREATE TABLE IF NOT EXISTS `refresh_token` (
   `id` BIGINT(20) NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) NOT NULL,
-  `key` varchar(64) NOT NULL UNIQUE,
+  `key` varchar(255) NOT NULL UNIQUE,
   `expiration` BIGINT(20) UNSIGNED NOT NULL,
   PRIMARY KEY (`id`),
   KEY `refresh_user_idx` (`user_id`),
