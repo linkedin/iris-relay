@@ -11,8 +11,7 @@ setuptools.setup(
     packages=setuptools.find_packages('src'),
     include_package_data=True,
     install_requires=[
-        # TODO: update PyOpenSSL
-        'PyOpenSSL==16.2.0',
+        'PyOpenSSL==18.0.0',
         'PyYAML==3.11',
         'gevent==1.1.2',
         # TODO: update google client
