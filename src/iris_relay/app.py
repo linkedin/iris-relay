@@ -843,15 +843,20 @@ def get_relay_app(config=None):
                          config['iris']['port'],
                          config['iris'].get('relay_app_name', 'iris-relay'),
                          config['iris']['api_key'])
-    gmail = Gmail(config.get('gmail'), config.get('proxy'))
     saml = SAML(config.get('saml'))
 
     # Note that ReqBodyMiddleware must be run before AuthMiddleware, since
     # authentication uses the post body
     app = falcon.API(middleware=[ReqBodyMiddleware(), AuthMiddleware(config)])
 
-    gmail_relay = GmailRelay(config, iclient, gmail)
-    gmail_oneclick_relay = GmailOneClickRelay(config, iclient)
+    gmail_config = config.get('gmail')
+    if gmail_config:
+        gmail = Gmail(gmail_config, config.get('proxy'))
+        gmail_relay = GmailRelay(config, iclient, gmail)
+        gmail_oneclick_relay = GmailOneClickRelay(config, iclient)
+        app.add_route('/api/v0/gmail/relay', gmail_relay)
+        app.add_route('/api/v0/gmail-oneclick/relay', gmail_oneclick_relay)
+
     twilio_calls_say = TwilioCallsSay()
     twilio_calls_gather = TwilioCallsGather(config)
     twilio_calls_relay = TwilioCallsRelay(config, iclient)
@@ -861,8 +866,6 @@ def get_relay_app(config=None):
     twilio_delivery_status = TwilioDeliveryStatus(config, iclient)
     healthcheck = Healthcheck(config.get('healthcheck_path'))
 
-    app.add_route('/api/v0/gmail/relay', gmail_relay)
-    app.add_route('/api/v0/gmail-oneclick/relay', gmail_oneclick_relay)
     app.add_route('/api/v0/twilio/calls/say', twilio_calls_say)
     app.add_route('/api/v0/twilio/calls/gather', twilio_calls_gather)
     app.add_route('/api/v0/twilio/calls/relay', twilio_calls_relay)
