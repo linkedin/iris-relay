@@ -21,7 +21,7 @@ setuptools.setup(
         'slackclient',
         'streql==3.0.2',
         'twilio==4.5.0',
-        'urllib3==1.21.1',
+        'urllib3==1.23',
         'falcon==1.1.0',
         'ujson==1.35',
     ],
