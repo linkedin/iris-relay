@@ -31,7 +31,7 @@ from iris_relay.saml import SAML
 
 logger = getLogger(__name__)
 
-uuid4hex = re.compile('[0-9a-f]{32}\Z', re.I)
+uuid4hex = re.compile(r'[0-9a-f]{32}\Z', re.I)
 
 
 def process_api_response(content):
@@ -841,12 +841,8 @@ class CORS(object):
         else:
             return
 
-        if (req_succeeded
-            and req.method == 'OPTIONS'
-            and req.get_header('Access-Control-Request-Method')
-        ):
-            # This is a CORS preflight request. Patch the
-            # response accordingly.
+        if (req_succeeded and req.method == 'OPTIONS' and req.get_header('Access-Control-Request-Method')):
+            # This is a CORS preflight request. Patch the response accordingly.
 
             allow = resp.get_header('Allow')
 
@@ -861,6 +857,7 @@ class CORS(object):
                 ('Access-Control-Allow-Headers', allow_headers),
                 ('Access-Control-Max-Age', '86400'),  # 24 hours
             ))
+
 
 def read_config_from_argv():
     import sys
