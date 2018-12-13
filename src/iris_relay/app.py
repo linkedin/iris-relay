@@ -31,7 +31,7 @@ from iris_relay.saml import SAML
 
 logger = getLogger(__name__)
 
-uuid4hex = re.compile('[0-9a-f]{32}\Z', re.I)
+uuid4hex = re.compile(r'[0-9a-f]{32}\Z', re.I)
 
 
 def process_api_response(content):
@@ -654,8 +654,10 @@ class MobileSink(object):
                 result = self.mobile_client.post(path, body)
             elif req.method == 'GET':
                 result = self.mobile_client.get(path)
+            elif req.method == 'OPTIONS':
+                return
             else:
-                raise falcon.HTTPMethodNotAllowed()
+                raise falcon.HTTPMethodNotAllowed(['GET', 'POST', 'PUT', 'DELETE'])
         except MaxRetryError as e:
                 logger.error(e.reason)
                 raise falcon.HTTPInternalServerError('Internal Server Error', 'Max retry error, api unavailable')
@@ -711,6 +713,10 @@ class AuthMiddleware(object):
             self.auth = lambda x: True
 
     def process_request(self, req, resp):
+        # CORS Pre-flight
+        if req.method == 'OPTIONS':
+            resp.status = falcon.HTTP_204
+            return
         # http basic auth
         if self.config['server'].get('enable_basic_auth'):
             hdr_auth = req.get_header('AUTHORIZATION')
@@ -821,6 +827,38 @@ class ReqBodyMiddleware(object):
         req.context['body'] = req.stream.read()
 
 
+class CORS(object):
+    # Based on example from kgriffs
+    def __init__(self, allowed_origins):
+        self.allowed_origins = allowed_origins
+
+    def process_response(self, req, resp, resource, req_succeeded):
+        origin = req.get_header('origin')
+        if not origin:
+            return
+        if origin in self.allowed_origins:
+            resp.set_header('Access-Control-Allow-Origin', origin)
+        else:
+            return
+
+        if (req_succeeded and req.method == 'OPTIONS' and req.get_header('Access-Control-Request-Method')):
+            # This is a CORS preflight request. Patch the response accordingly.
+
+            allow = resp.get_header('Allow')
+
+            allow_headers = req.get_header(
+                'Access-Control-Request-Headers'
+            )
+            if not allow_headers:
+                allow_headers = '*'
+
+            resp.set_headers((
+                ('Access-Control-Allow-Methods', allow),
+                ('Access-Control-Allow-Headers', allow_headers),
+                ('Access-Control-Max-Age', '86400'),  # 24 hours
+            ))
+
+
 def read_config_from_argv():
     import sys
     if len(sys.argv) < 2:
@@ -847,7 +885,8 @@ def get_relay_app(config=None):
 
     # Note that ReqBodyMiddleware must be run before AuthMiddleware, since
     # authentication uses the post body
-    app = falcon.API(middleware=[ReqBodyMiddleware(), AuthMiddleware(config)])
+    cors = CORS(config.get('allow_origins_list', []))
+    app = falcon.API(middleware=[ReqBodyMiddleware(), AuthMiddleware(config), cors])
 
     gmail_config = config.get('gmail')
     if gmail_config:

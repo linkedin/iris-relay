@@ -6,6 +6,8 @@ server:
   basic_auth:
     iris_twilio_user: 'barbaz'
   # lb_routing_path: '/iris-relay'
+allow_origins_list:
+ - http://localhost:8080
 twilio:
   remote_host: 'localhost:11648'
   auth_token: 'foobar'
