@@ -829,10 +829,10 @@ class ReqBodyMiddleware(object):
 
 class CORS(object):
     # Based on example from kgriffs
-    def __init__(self, allowed_origins=[]):
+    def __init__(self, allowed_origins):
         self.allowed_origins = allowed_origins
 
-    def process_response(self, req, resp, resource, req_succeeded)
+    def process_response(self, req, resp, resource, req_succeeded):
         origin = req.get_header('origin')
         if not origin:
             return
