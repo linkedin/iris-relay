@@ -895,6 +895,9 @@ def get_relay_app(config=None):
         gmail_oneclick_relay = GmailOneClickRelay(config, iclient)
         app.add_route('/api/v0/gmail/relay', gmail_relay)
         app.add_route('/api/v0/gmail-oneclick/relay', gmail_oneclick_relay)
+        if 'verification_code' in gmail_config:
+            vcode = config['gmail']['verification_code']
+            app.add_route('/' + vcode, GmailVerification(vcode))
 
     twilio_calls_say = TwilioCallsSay()
     twilio_calls_gather = TwilioCallsGather(config)
@@ -927,10 +930,6 @@ def get_relay_app(config=None):
         app.add_route('/saml/sso/{idp_name}', IDPInitiated(mobile_cfg.get('auth'), saml))
         app.add_route('/api/v0/mobile/refresh', TokenRefresh(mobile_cfg.get('auth')))
         app.add_route('/api/v0/mobile/device', RegisterDevice(iclient))
-
-    if 'verification_code' in config['gmail']:
-        vcode = config['gmail']['verification_code']
-        app.add_route('/' + vcode, GmailVerification(vcode))
 
     return app
 
