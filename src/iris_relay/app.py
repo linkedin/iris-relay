@@ -936,7 +936,7 @@ def get_relay_app(config=None):
         try:
             logger.debug('loading post init hook <%s>', hook)
             getattr(import_module(hook), 'init')(app, config)
-        except:
+        except Exception:
             logger.exception('Failed loading post init hook <%s>', hook)
 
     return app
