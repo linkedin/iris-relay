@@ -1,0 +1,26 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/python:2.7-stretch-browsers
+      - image: mysql/mysql-server:5.7
+        environment:
+          - MYSQL_ROOT_PASSWORD=admin
+          - MYSQL_ROOT_HOST=%
+    steps:
+      - checkout
+      - run:
+          name: Prepare virtualenv
+          command: |
+            virtualenv venv
+            source venv/bin/activate
+            python setup.py develop
+            pip install -r dev_requirements.txt
+            echo 'GOOD' > /tmp/relay_health
+      - run:
+          name: Run tests
+          command: |
+            source venv/bin/activate
+            make serve &
+            make check
+
