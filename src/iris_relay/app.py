@@ -10,6 +10,7 @@ from base64 import b64encode, decodestring, urlsafe_b64encode
 from hashlib import sha1, sha512
 from cryptography.fernet import Fernet
 from logging import basicConfig, getLogger
+from importlib import import_module
 import logging
 from urllib import unquote_plus, urlencode, unquote
 import urllib2
@@ -930,6 +931,13 @@ def get_relay_app(config=None):
         app.add_route('/saml/sso/{idp_name}', IDPInitiated(mobile_cfg.get('auth'), saml))
         app.add_route('/api/v0/mobile/refresh', TokenRefresh(mobile_cfg.get('auth')))
         app.add_route('/api/v0/mobile/device', RegisterDevice(iclient))
+
+    for hook in config.get('post_init_hook', []):
+        try:
+            logger.debug('loading post init hook <%s>', hook)
+            getattr(import_module(hook), 'init')(app, config)
+        except:
+            logger.exception('Failed loading post init hook <%s>', hook)
 
     return app
 
