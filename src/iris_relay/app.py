@@ -673,7 +673,7 @@ class MobileSink(object):
         else:
             resp.status = falcon.HTTP_200
             resp.content_type = result.headers['Content-Type']
-            resp.body = json.dumps(result.json())
+            resp.body = result.content
 
 
 class RegisterDevice(object):
