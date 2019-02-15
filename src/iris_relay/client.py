@@ -9,37 +9,6 @@ import hashlib
 import base64
 from urllib import urlencode
 from urllib3.connectionpool import HTTPConnectionPool
-import requests
-
-
-class IrisAuth(requests.auth.AuthBase):
-    def __init__(self, app, key):
-        if not isinstance(app, bytes):
-            app = app.encode('utf-8')
-        self.header = b'hmac ' + app + b':'
-        if not isinstance(key, bytes):
-            key = key.encode('utf-8')
-        self.HMAC = hmac.new(key, b'', hashlib.sha512)
-
-    def __call__(self, request):
-        HMAC = self.HMAC.copy()
-        path = str(request.path_url)
-        method = str(request.method)
-        body = str(request.body or '')
-        window = str(int(time.time()) // 5)
-        content = '%s %s %s %s' % (window, method, path, body)
-        HMAC.update(content.encode('utf-8'))
-        digest = base64.urlsafe_b64encode(HMAC.digest())
-        request.headers['Authorization'] = self.header + digest
-        return request
-
-
-class MobileClient(requests.Session):
-    def __init__(self, app, api_key, api_host, version=0):
-        super(MobileClient, self).__init__()
-        self.app = app
-        self.auth = IrisAuth(app, api_key)
-        self.url = api_host + '/v%d/' % version
 
 
 class IrisClient(HTTPConnectionPool):

@@ -27,9 +27,10 @@ import os
 from saml2 import entity
 
 from iris_relay.client import IrisClient
-from iris_relay.client import MobileClient
 from iris_relay.gmail import Gmail
 from iris_relay.saml import SAML
+
+from irisclient import IrisClient as MobileClient
 
 logger = getLogger(__name__)
 
@@ -925,7 +926,7 @@ def get_relay_app(config=None):
         db.init(config['db'])
         mobile_client = MobileClient(app=mobile_cfg.get('relay_app_name', 'iris-relay'),
                                      api_host=mobile_cfg['host'],
-                                     api_key=mobile_cfg['api_key'])
+                                     key=mobile_cfg['api_key'])
 
         mobile_sink = MobileSink(mobile_client, mobile_cfg['host'])
         app.add_sink(mobile_sink, prefix='/api/v0/mobile/')
