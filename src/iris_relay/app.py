@@ -30,6 +30,8 @@ from iris_relay.client import IrisClient
 from iris_relay.gmail import Gmail
 from iris_relay.saml import SAML
 
+from irisclient import IrisClient as MobileClient
+
 logger = getLogger(__name__)
 
 uuid4hex = re.compile(r'[0-9a-f]{32}\Z', re.I)
@@ -184,7 +186,7 @@ class SPInitiated(object):
         redirect_url = None
         # Select the IdP URL to send the AuthN request to
         for key, value in info['headers']:
-            if key is 'Location':
+            if key == 'Location':
                 redirect_url = value
         # NOTE:
         #   I realize I _technically_ don't need to set Cache-Control or Pragma:
@@ -472,7 +474,7 @@ class TwilioCallsRelay(object):
             self.return_twixml_call('Connection error to web hook.', resp)
             return
 
-        if re.status is not 200:
+        if re.status != 200:
             self.return_twixml_call(
                 'Got status code: %d, content: %s' % (re.status,
                                                       re.data[0:100]), resp)
@@ -508,7 +510,7 @@ class TwilioMessagesRelay(object):
             self.return_twixml_message('Connection error to web hook.', resp)
             return
 
-        if re.status is not 200:
+        if re.status != 200:
             self.return_twixml_message(
                 'Got status code: %d, content: %s' % (re.status,
                                                       re.data[0:100]), resp)
@@ -536,7 +538,7 @@ class TwilioDeliveryStatus(object):
             logger.exception('Failed posting data to iris-api')
             raise falcon.HTTPInternalServerError('Internal Server Error', 'API call failed')
 
-        if re.status is not 204:
+        if re.status != 204:
             logger.error('Invalid response from API for delivery status update: %s', re.status)
             raise falcon.HTTPBadRequest('Likely bad params passed', 'Invalid response from API')
 
@@ -588,7 +590,7 @@ class SlackMessagesRelay(object):
                 return
             if result.status == 400:
                 raise falcon.HTTPBadRequest('Bad Request', '')
-            elif result.status is not 200:
+            elif result.status != 200:
                 raise falcon.HTTPInternalServerError('Internal Server Error', 'Unknown response from the api')
             else:
                 content = process_api_response(result.data)
@@ -603,6 +605,7 @@ class SlackAuthenticate(object):
     """
     Will be used only once to setup slack OAuth
     """
+
     def on_get(self, req, resp):
         resp.status = falcon.HTTP_200
         resp.body = 'Message Received'
@@ -640,18 +643,19 @@ class GmailVerification(object):
 
 class MobileSink(object):
 
-    def __init__(self, mobile_client):
+    def __init__(self, mobile_client, base_url):
         self.mobile_client = mobile_client
+        self.base_url = base_url
 
     def __call__(self, req, resp):
-        path = '/'.join(req.path.split('/')[4:])
+        path = self.base_url + '/v0/' + '/'.join(req.path.split('/')[4:])
         if req.query_string:
             path += '?%s' % req.query_string
         try:
             if req.method == 'POST':
                 body = ''
                 if req.context['body']:
-                    body = ujson.loads(req.context['body'])
+                    body = req.context['body']
                 result = self.mobile_client.post(path, body)
             elif req.method == 'GET':
                 result = self.mobile_client.get(path)
@@ -660,16 +664,16 @@ class MobileSink(object):
             else:
                 raise falcon.HTTPMethodNotAllowed(['GET', 'POST', 'PUT', 'DELETE'])
         except MaxRetryError as e:
-                logger.error(e.reason)
-                raise falcon.HTTPInternalServerError('Internal Server Error', 'Max retry error, api unavailable')
-        if result.status == 400:
+            logger.error(e.reason)
+            raise falcon.HTTPInternalServerError('Internal Server Error', 'Max retry error, api unavailable')
+        if result.status_code == 400:
             raise falcon.HTTPBadRequest('Bad Request', '')
-        elif str(result.status)[0] != '2':
+        elif str(result.status_code)[0] != '2':
             raise falcon.HTTPInternalServerError('Internal Server Error', 'Unknown response from the api')
         else:
             resp.status = falcon.HTTP_200
             resp.content_type = result.headers['Content-Type']
-            resp.body = result.data
+            resp.body = result.content
 
 
 class RegisterDevice(object):
@@ -683,7 +687,7 @@ class RegisterDevice(object):
         result = self.iris.post('devices', data)
         if result.status == 400:
             raise falcon.HTTPBadRequest('Bad Request', '')
-        elif result.status is not 201:
+        elif result.status != 201:
             logger.error('Unknown response from API: %s: %s', result.status, result.data)
             raise falcon.HTTPInternalServerError('Internal Server Error', 'Unknown response from the api')
         resp.status = falcon.HTTP_201
@@ -920,12 +924,11 @@ def get_relay_app(config=None):
     mobile_cfg = config.get('iris-mobile', {})
     if mobile_cfg.get('activated'):
         db.init(config['db'])
-        mobile_client = IrisClient(mobile_cfg['host'],
-                                   mobile_cfg['port'],
-                                   mobile_cfg.get('relay_app_name', 'iris-relay'),
-                                   mobile_cfg['api_key'],
-                                   version=None)
-        mobile_sink = MobileSink(mobile_client)
+        mobile_client = MobileClient(app=mobile_cfg.get('relay_app_name', 'iris-relay'),
+                                     api_host=mobile_cfg['host'],
+                                     key=mobile_cfg['api_key'])
+
+        mobile_sink = MobileSink(mobile_client, mobile_cfg['host'])
         app.add_sink(mobile_sink, prefix='/api/v0/mobile/')
         app.add_route('/saml/login/{idp_name}', SPInitiated(saml))
         app.add_route('/saml/sso/{idp_name}', IDPInitiated(mobile_cfg.get('auth'), saml))
