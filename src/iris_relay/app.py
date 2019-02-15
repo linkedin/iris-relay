@@ -15,7 +15,6 @@ import logging
 from urllib import unquote_plus, urlencode, unquote
 import urllib2
 import urlparse
-import grequests
 
 from . import db
 from streql import equals
@@ -642,47 +641,6 @@ class GmailVerification(object):
         resp.status = falcon.HTTP_200
         resp.body = self.msg
 
-class GraphImageResource(object):
-
-    def __init__(self, graph_netlocs):
-        self.valid_netlocs = graph_netlocs
-
-    def on_get(self, req, resp):
-        graph_url = req.get_param('graph_url', required=True)
-        current_graph_url = self.get_current_url(graph_url)
-        if not self.validate_url(graph_url) or not self.validate_url(current_graph_url):
-            raise HTTPBadRequest('Incident graph url fails validation')
-        reqs = (grequests.get(url) for url in [graph_url, current_graph_url])
-        rs = grequests.map(reqs)
-        for r in rs:
-            if r is None or r.status_code != 200:
-                logger.warning("Failed to retrieve graph for URL: %s", graph_url)
-                raise HTTPBadRequest('Failed to retrieve graph image')
-        original_graph = 'data:%s;base64,%s' % (rs[0].headers['Content-Type'], b64encode(rs[0].content))
-        current_graph = 'data:%s;base64,%s' % (rs[1].headers['Content-Type'], b64encode(rs[1].content))
-        resp.body = json.dumps({'original': original_graph, 'current': current_graph})
-
-    def get_current_url(self, graph_url):
-        # HACK: Very inGraphs-specific. May need to add a way to specify graph source
-        # HACK: Can't use urlparse here, since inGraphs has non-standard query string parameters without values
-        end_re = re.compile('(.*end=)([0-9]*)(.*)')
-        start_re = re.compile('(.*start=)([0-9]*)(.*)')
-
-        try:
-            base, query = graph_url.split('?')
-            end_time = int(re.match(end_re, query).group(2))
-            start_time = int(re.match(start_re, query).group(2))
-            time_diff = int(time.time()) - end_time
-            query = re.sub(start_re, r'\g<1>%s\g<3>' % (start_time + time_diff), query)
-            query = re.sub(end_re, r'\g<1>%s\g<3>' % (end_time + time_diff), query)
-            current_graph_url = '?'.join([base, query])
-        except ValueError:
-            return graph_url
-        return current_graph_url
-
-    def validate_url(self, url):
-        return urlparse.urlparse(url).netloc in self.valid_netlocs
-
 class MobileSink(object):
 
     def __init__(self, mobile_client, base_url):
@@ -690,7 +648,7 @@ class MobileSink(object):
         self.base_url = base_url
 
     def __call__(self, req, resp):
-        path = self.base_url + '/'.join(req.path.split('/')[4:])
+        path = self.base_url + '/v0/' + '/'.join(req.path.split('/')[4:])
         if req.query_string:
             path += '?%s' % req.query_string
         try:
@@ -976,7 +934,6 @@ def get_relay_app(config=None):
         app.add_route('/saml/sso/{idp_name}', IDPInitiated(mobile_cfg.get('auth'), saml))
         app.add_route('/api/v0/mobile/refresh', TokenRefresh(mobile_cfg.get('auth')))
         app.add_route('/api/v0/mobile/device', RegisterDevice(iclient))
-        app.add_route('/api/v0/mobile/graph', GraphImageResource(config.get('graph_netlocs')))
 
     for hook in config.get('post_init_hook', []):
         try:

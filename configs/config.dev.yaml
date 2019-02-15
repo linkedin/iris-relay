@@ -42,8 +42,6 @@ iris-mobile:
     username_attr: sAMAccountName
     # Example key; change in production
     encrypt_key: iizL8s_AqSBwZO-xzJ0bFt_kMSg6A8OsTAMON2gqpII=
-graph_netlocs:
-  - 'localhost'
 gmail:
   project: iris-1234
   push_endpoint: https://www.fooo.bar/iris-relay/api/v0/gmail/relay
