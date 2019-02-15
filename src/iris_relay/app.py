@@ -22,7 +22,6 @@ from urllib3.exceptions import MaxRetryError
 import yaml
 import falcon
 import ujson
-import json
 import falcon.uri
 import os
 from saml2 import entity
