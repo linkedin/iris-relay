@@ -607,6 +607,7 @@ class SlackAuthenticate(object):
     """
     Will be used only once to setup slack OAuth
     """
+
     def on_get(self, req, resp):
         resp.status = falcon.HTTP_200
         resp.body = 'Message Received'
@@ -641,6 +642,7 @@ class GmailVerification(object):
         resp.status = falcon.HTTP_200
         resp.body = self.msg
 
+
 class MobileSink(object):
 
     def __init__(self, mobile_client, base_url):
@@ -664,8 +666,8 @@ class MobileSink(object):
             else:
                 raise falcon.HTTPMethodNotAllowed(['GET', 'POST', 'PUT', 'DELETE'])
         except MaxRetryError as e:
-                logger.error(e.reason)
-                raise falcon.HTTPInternalServerError('Internal Server Error', 'Max retry error, api unavailable')
+            logger.error(e.reason)
+            raise falcon.HTTPInternalServerError('Internal Server Error', 'Max retry error, api unavailable')
         if result.status_code == 400:
             raise falcon.HTTPBadRequest('Bad Request', '')
         elif str(result.status_code)[0] != '2':
@@ -924,9 +926,9 @@ def get_relay_app(config=None):
     mobile_cfg = config.get('iris-mobile', {})
     if mobile_cfg.get('activated'):
         db.init(config['db'])
-        mobile_client = MobileClient(app = mobile_cfg.get('relay_app_name', 'iris-relay'),
-                                   api_host = mobile_cfg['host'],
-                                   api_key = mobile_cfg['api_key'])
+        mobile_client = MobileClient(app=mobile_cfg.get('relay_app_name', 'iris-relay'),
+                                     api_host=mobile_cfg['host'],
+                                     api_key=mobile_cfg['api_key'])
 
         mobile_sink = MobileSink(mobile_client, mobile_cfg['host'])
         app.add_sink(mobile_sink, prefix='/api/v0/mobile/')

@@ -11,6 +11,7 @@ from urllib import urlencode
 from urllib3.connectionpool import HTTPConnectionPool
 import requests
 
+
 class IrisAuth(requests.auth.AuthBase):
     def __init__(self, app, key):
         if not isinstance(app, bytes):
@@ -39,6 +40,7 @@ class MobileClient(requests.Session):
         self.app = app
         self.auth = IrisAuth(app, api_key)
         self.url = api_host + '/v%d/' % version
+
 
 class IrisClient(HTTPConnectionPool):
     def __init__(self, host, port, user, api_key, version=0, **kwargs):
