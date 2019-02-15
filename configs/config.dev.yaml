@@ -8,6 +8,8 @@ server:
   # lb_routing_path: '/iris-relay'
 allow_origins_list:
  - http://localhost:8080
+ - http://localhost:8100
+ - http://localhost:35729
 twilio:
   remote_host: 'localhost:11648'
   auth_token: 'foobar'
@@ -15,10 +17,10 @@ slack:
   verification_token: 'foo'
   response_text: 'Alert claimed.'
 iris:
-  relay_app_name: 'iris-mobile'
+  relay_app_name: 'iris-relay'
   host: localhost
   port: 16649
-  api_key: 'key'
+  api_key: 'abc123'
   hook:
     gmail: 'response/gmail'
     gmail_one_click: 'response/gmail-oneclick'
@@ -27,10 +29,11 @@ iris:
     twilio_status: 'twilio/deliveryupdate'
     slack: 'response/slack'
 iris-mobile:
+  relay_app_name: 'iris-mobile'
   activated: True
-  host: 'localhost'
-  port: 5000
-  api_key: 'abc'
+  host: 'http://localhost:16649/v0/'
+  port: 16649
+  api_key: 'abc123'
   auth:
     time_window: 90
     access_ttl: 28800
@@ -39,6 +42,8 @@ iris-mobile:
     username_attr: sAMAccountName
     # Example key; change in production
     encrypt_key: iizL8s_AqSBwZO-xzJ0bFt_kMSg6A8OsTAMON2gqpII=
+graph_netlocs:
+  - 'localhost'
 gmail:
   project: iris-1234
   push_endpoint: https://www.fooo.bar/iris-relay/api/v0/gmail/relay

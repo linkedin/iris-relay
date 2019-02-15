@@ -14,6 +14,8 @@ from importlib import import_module
 import logging
 from urllib import unquote_plus, urlencode, unquote
 import urllib2
+import urlparse
+import grequests
 
 from . import db
 from streql import equals
@@ -22,11 +24,14 @@ from urllib3.exceptions import MaxRetryError
 import yaml
 import falcon
 import ujson
+import json
 import falcon.uri
 import os
 from saml2 import entity
+from falcon import HTTPBadRequest
 
 from iris_relay.client import IrisClient
+from iris_relay.client import MobileClient
 from iris_relay.gmail import Gmail
 from iris_relay.saml import SAML
 
@@ -637,21 +642,62 @@ class GmailVerification(object):
         resp.status = falcon.HTTP_200
         resp.body = self.msg
 
+class GraphImageResource(object):
+
+    def __init__(self, graph_netlocs):
+        self.valid_netlocs = graph_netlocs
+
+    def on_get(self, req, resp):
+        graph_url = req.get_param('graph_url', required=True)
+        current_graph_url = self.get_current_url(graph_url)
+        if not self.validate_url(graph_url) or not self.validate_url(current_graph_url):
+            raise HTTPBadRequest('Incident graph url fails validation')
+        reqs = (grequests.get(url) for url in [graph_url, current_graph_url])
+        rs = grequests.map(reqs)
+        for r in rs:
+            if r is None or r.status_code != 200:
+                logger.warning("Failed to retrieve graph for URL: %s", graph_url)
+                raise HTTPBadRequest('Failed to retrieve graph image')
+        original_graph = 'data:%s;base64,%s' % (rs[0].headers['Content-Type'], b64encode(rs[0].content))
+        current_graph = 'data:%s;base64,%s' % (rs[1].headers['Content-Type'], b64encode(rs[1].content))
+        resp.body = json.dumps({'original': original_graph, 'current': current_graph})
+
+    def get_current_url(self, graph_url):
+        # HACK: Very inGraphs-specific. May need to add a way to specify graph source
+        # HACK: Can't use urlparse here, since inGraphs has non-standard query string parameters without values
+        end_re = re.compile('(.*end=)([0-9]*)(.*)')
+        start_re = re.compile('(.*start=)([0-9]*)(.*)')
+
+        try:
+            base, query = graph_url.split('?')
+            end_time = int(re.match(end_re, query).group(2))
+            start_time = int(re.match(start_re, query).group(2))
+            time_diff = int(time.time()) - end_time
+            query = re.sub(start_re, r'\g<1>%s\g<3>' % (start_time + time_diff), query)
+            query = re.sub(end_re, r'\g<1>%s\g<3>' % (end_time + time_diff), query)
+            current_graph_url = '?'.join([base, query])
+        except ValueError:
+            return graph_url
+        return current_graph_url
+
+    def validate_url(self, url):
+        return urlparse.urlparse(url).netloc in self.valid_netlocs
 
 class MobileSink(object):
 
-    def __init__(self, mobile_client):
+    def __init__(self, mobile_client, base_url):
         self.mobile_client = mobile_client
+        self.base_url = base_url
 
     def __call__(self, req, resp):
-        path = '/'.join(req.path.split('/')[4:])
+        path = self.base_url + '/'.join(req.path.split('/')[4:])
         if req.query_string:
             path += '?%s' % req.query_string
         try:
             if req.method == 'POST':
                 body = ''
                 if req.context['body']:
-                    body = ujson.loads(req.context['body'])
+                    body = req.context['body']
                 result = self.mobile_client.post(path, body)
             elif req.method == 'GET':
                 result = self.mobile_client.get(path)
@@ -662,14 +708,14 @@ class MobileSink(object):
         except MaxRetryError as e:
                 logger.error(e.reason)
                 raise falcon.HTTPInternalServerError('Internal Server Error', 'Max retry error, api unavailable')
-        if result.status == 400:
+        if result.status_code == 400:
             raise falcon.HTTPBadRequest('Bad Request', '')
-        elif str(result.status)[0] != '2':
+        elif str(result.status_code)[0] != '2':
             raise falcon.HTTPInternalServerError('Internal Server Error', 'Unknown response from the api')
         else:
             resp.status = falcon.HTTP_200
             resp.content_type = result.headers['Content-Type']
-            resp.body = result.data
+            resp.body = json.dumps(result.json())
 
 
 class RegisterDevice(object):
@@ -920,17 +966,17 @@ def get_relay_app(config=None):
     mobile_cfg = config.get('iris-mobile', {})
     if mobile_cfg.get('activated'):
         db.init(config['db'])
-        mobile_client = IrisClient(mobile_cfg['host'],
-                                   mobile_cfg['port'],
-                                   mobile_cfg.get('relay_app_name', 'iris-relay'),
-                                   mobile_cfg['api_key'],
-                                   version=None)
-        mobile_sink = MobileSink(mobile_client)
+        mobile_client = MobileClient(app = mobile_cfg.get('relay_app_name', 'iris-relay'),
+                                   api_host = mobile_cfg['host'],
+                                   api_key = mobile_cfg['api_key'])
+
+        mobile_sink = MobileSink(mobile_client, mobile_cfg['host'])
         app.add_sink(mobile_sink, prefix='/api/v0/mobile/')
         app.add_route('/saml/login/{idp_name}', SPInitiated(saml))
         app.add_route('/saml/sso/{idp_name}', IDPInitiated(mobile_cfg.get('auth'), saml))
         app.add_route('/api/v0/mobile/refresh', TokenRefresh(mobile_cfg.get('auth')))
         app.add_route('/api/v0/mobile/device', RegisterDevice(iclient))
+        app.add_route('/api/v0/mobile/graph', GraphImageResource(config.get('graph_netlocs')))
 
     for hook in config.get('post_init_hook', []):
         try:
