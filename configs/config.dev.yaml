@@ -17,7 +17,7 @@ slack:
   verification_token: 'foo'
   response_text: 'Alert claimed.'
 iris:
-  relay_app_name: 'iris-elay'
+  relay_app_name: 'iris-relay'
   host: localhost
   port: 16649
   api_key: 'foo'
