@@ -14,7 +14,6 @@ from importlib import import_module
 import logging
 from urllib import unquote_plus, urlencode, unquote
 import urllib2
-import urlparse
 
 from . import db
 from streql import equals
@@ -27,7 +26,6 @@ import json
 import falcon.uri
 import os
 from saml2 import entity
-from falcon import HTTPBadRequest
 
 from iris_relay.client import IrisClient
 from iris_relay.client import MobileClient
@@ -188,7 +186,7 @@ class SPInitiated(object):
         redirect_url = None
         # Select the IdP URL to send the AuthN request to
         for key, value in info['headers']:
-            if key is 'Location':
+            if key == 'Location':
                 redirect_url = value
         # NOTE:
         #   I realize I _technically_ don't need to set Cache-Control or Pragma:
@@ -476,7 +474,7 @@ class TwilioCallsRelay(object):
             self.return_twixml_call('Connection error to web hook.', resp)
             return
 
-        if re.status is not 200:
+        if re.status != 200:
             self.return_twixml_call(
                 'Got status code: %d, content: %s' % (re.status,
                                                       re.data[0:100]), resp)
@@ -512,7 +510,7 @@ class TwilioMessagesRelay(object):
             self.return_twixml_message('Connection error to web hook.', resp)
             return
 
-        if re.status is not 200:
+        if re.status != 200:
             self.return_twixml_message(
                 'Got status code: %d, content: %s' % (re.status,
                                                       re.data[0:100]), resp)
@@ -540,7 +538,7 @@ class TwilioDeliveryStatus(object):
             logger.exception('Failed posting data to iris-api')
             raise falcon.HTTPInternalServerError('Internal Server Error', 'API call failed')
 
-        if re.status is not 204:
+        if re.status != 204:
             logger.error('Invalid response from API for delivery status update: %s', re.status)
             raise falcon.HTTPBadRequest('Likely bad params passed', 'Invalid response from API')
 
@@ -592,7 +590,7 @@ class SlackMessagesRelay(object):
                 return
             if result.status == 400:
                 raise falcon.HTTPBadRequest('Bad Request', '')
-            elif result.status is not 200:
+            elif result.status != 200:
                 raise falcon.HTTPInternalServerError('Internal Server Error', 'Unknown response from the api')
             else:
                 content = process_api_response(result.data)
@@ -689,7 +687,7 @@ class RegisterDevice(object):
         result = self.iris.post('devices', data)
         if result.status == 400:
             raise falcon.HTTPBadRequest('Bad Request', '')
-        elif result.status is not 201:
+        elif result.status != 201:
             logger.error('Unknown response from API: %s: %s', result.status, result.data)
             raise falcon.HTTPInternalServerError('Internal Server Error', 'Unknown response from the api')
         resp.status = falcon.HTTP_201

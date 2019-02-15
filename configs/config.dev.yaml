@@ -17,10 +17,10 @@ slack:
   verification_token: 'foo'
   response_text: 'Alert claimed.'
 iris:
-  relay_app_name: 'iris-relay'
+  relay_app_name: 'iris-elay'
   host: localhost
   port: 16649
-  api_key: 'abc123'
+  api_key: 'foo'
   hook:
     gmail: 'response/gmail'
     gmail_one_click: 'response/gmail-oneclick'
@@ -31,9 +31,9 @@ iris:
 iris-mobile:
   relay_app_name: 'iris-mobile'
   activated: True
-  host: 'http://localhost:16649/v0/'
+  host: 'localhost'
   port: 16649
-  api_key: 'abc123'
+  api_key: 'foo'
   auth:
     time_window: 90
     access_ttl: 28800
