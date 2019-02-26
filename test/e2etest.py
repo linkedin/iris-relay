@@ -1,6 +1,6 @@
 import requests
 
-host = 'http://localhost:16648'
+host = 'http://0.0.0.0:16648'
 base_url = host + '/api/v0/'
 
 
