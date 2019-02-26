@@ -58,7 +58,9 @@ def process_message(message):
         # TODO(khrichar): support other content types
         mime_type = part.get('mimeType')
         if mime_type == 'text/plain':
-            content = urlsafe_b64decode(str(part.get('body', {}).get('data', '')))
+            encoded_content = part.get('body', {}).get('data', '')
+            encoded_content = encoded_content if isinstance(encoded_content, bytes) else encoded_content.encode('utf8')
+            content = urlsafe_b64decode(encoded_content)
             yield headers, content
         elif mime_type == 'text/html':
             logger.debug('ignore html mime type for message: %s', message)

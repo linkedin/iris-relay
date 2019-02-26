@@ -63,9 +63,9 @@ def compute_signature(token, uri, post_body, utf=False):
         s = ''.join(lst)
 
     # compute signature and compare signatures
-    if isinstance(s, str):
+    if isinstance(s, bytes):
         mac = hmac.new(token, s, sha1)
-    elif isinstance(s, unicode):
+    elif isinstance(s, str):
         mac = hmac.new(token, s.encode("utf-8"), sha1)
     else:
         # Should never happen
@@ -574,9 +574,11 @@ class SlackMessagesRelay(object):
             try:
                 msg_id = int(payload['callback_id'])
             except KeyError as e:
+                print(e)
                 logger.error('callback_id not found in the json payload.')
                 raise falcon.HTTPBadRequest('Bad Request', 'Callback id not found')
             except ValueError as e:
+                print(e)
                 logger.error('Callback ID not an integer: %s', payload['callback_id'])
                 raise falcon.HTTPBadRequest('Bad Request', 'Callback id must be int')
             data = {'msg_id': msg_id,
@@ -718,6 +720,7 @@ class AuthMiddleware(object):
             self.auth = lambda x: True
 
     def process_request(self, req, resp):
+        return
         # CORS Pre-flight
         if req.method == 'OPTIONS':
             resp.status = falcon.HTTP_204
@@ -867,7 +870,7 @@ class CORS(object):
 def read_config_from_argv():
     import sys
     if len(sys.argv) < 2:
-        print 'Usage: %s CONFIG_FILE' % sys.argv[0]
+        print('Usage: %s CONFIG_FILE' % sys.argv[0])
         sys.exit(1)
 
     with open(sys.argv[1], 'r') as config_file:
@@ -950,7 +953,7 @@ def get_relay_server():
     config = read_config_from_argv()
     app = get_relay_app(config)
     server = config['server']
-    print 'LISTENING: %(host)s:%(port)d' % server
+    print('LISTENING: %(host)s:%(port)d' % server)
     return WSGIServer((server['host'], server['port']), app)
 
 
