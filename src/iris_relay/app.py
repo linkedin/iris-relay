@@ -12,8 +12,16 @@ from cryptography.fernet import Fernet
 from logging import basicConfig, getLogger
 from importlib import import_module
 import logging
-from urllib import unquote_plus, urlencode, unquote
-import urllib2
+# try blocks to preserve python 2 and 3 compatibility
+try:
+    from urllib import unquote_plus, urlencode, unquote
+except ImportError:
+    from urllib.parse import unquote_plus, urlencode, unquote
+
+try:
+    import urllib2
+except ImportError:
+    import urllib.request as urllib2
 
 from . import db
 from streql import equals
@@ -56,11 +64,17 @@ def compute_signature(token, uri, post_body, utf=False):
     :returns: The computed signature
     """
     s = uri
+    # post_body = post_body if isinstance(post_body, bytes) else post_body.encode('utf8')
+    print(post_body)
     if len(post_body) > 0:
+        p_b_split = post_body.decode().split('&')
         lst = [unquote_plus(kv.replace('=', ''))
-               for kv in sorted(post_body.split('&'))]
+               for kv in sorted(p_b_split)]
         lst.insert(0, s)
         s = ''.join(lst)
+
+    s = s if isinstance(s, bytes) else s.encode('utf8')
+    token = token if isinstance(token, bytes) else token.encode('utf8')
 
     # compute signature and compare signatures
     if isinstance(s, bytes):
@@ -305,7 +319,8 @@ class GmailOneClickRelay(object):
         self.config = config
         self.iclient = iclient
         self.data_keys = ('msg_id', 'email_address', 'cmd')  # Order here matters; needs to match what is in iris-api
-        self.hmac = hmac.new(self.config['gmail_one_click_url_key'], '', sha512)
+        key = self.config['gmail_one_click_url_key']
+        self.hmac = hmac.new(key if isinstance(key, bytes) else key.encode('utf8'), b'', sha512)
 
     def on_get(self, req, resp):
         token = req.get_param('token', True)
@@ -333,7 +348,9 @@ class GmailOneClickRelay(object):
 
     def validate_token(self, given_token, data):
         mac = self.hmac.copy()
-        mac.update(' '.join(data[key] for key in self.data_keys))
+        text = ' '.join(data[key] for key in self.data_keys)
+        text = text if isinstance(text, bytes) else text.encode('utf8')
+        mac.update(text)
         return given_token == urlsafe_b64encode(mac.digest())
 
 
@@ -720,7 +737,6 @@ class AuthMiddleware(object):
             self.auth = lambda x: True
 
     def process_request(self, req, resp):
-        return
         # CORS Pre-flight
         if req.method == 'OPTIONS':
             resp.status = falcon.HTTP_204
@@ -756,6 +772,7 @@ class AuthMiddleware(object):
                     post_body = req.context['body']
                     expected_sigs = [compute_signature(t, ''.join(uri), post_body)
                                      for t in self.twilio_auth_token]
+                    sig = sig if isinstance(sig, bytes) else sig.encode('utf8')
                     if sig not in expected_sigs:
                         logger.warning('twilio validation failure: %s not in possible sigs: %s',
                                        sig, expected_sigs)
@@ -802,7 +819,7 @@ class AuthMiddleware(object):
                     key = self.fernet.decrypt(str(row[0]))
                     req.context['user'] = row[1]
 
-                    HMAC = hmac.new(key, text, hashlib.sha512)
+                    HMAC = hmac.new(key if isinstance(key, bytes) else key.encode('utf8'), text if isinstance(text, bytes) else text.encode('utf8'), hashlib.sha512)
                     digest = urlsafe_b64encode(HMAC.digest())
 
                     if hmac.compare_digest(client_digest, digest) and time_diff < self.time_window:
@@ -870,7 +887,7 @@ class CORS(object):
 def read_config_from_argv():
     import sys
     if len(sys.argv) < 2:
-        print('Usage: %s CONFIG_FILE' % sys.argv[0])
+        print(('Usage: %s CONFIG_FILE' % sys.argv[0]))
         sys.exit(1)
 
     with open(sys.argv[1], 'r') as config_file:
@@ -953,7 +970,7 @@ def get_relay_server():
     config = read_config_from_argv()
     app = get_relay_app(config)
     server = config['server']
-    print('LISTENING: %(host)s:%(port)d' % server)
+    print(('LISTENING: %(host)s:%(port)d' % server))
     return WSGIServer((server['host'], server['port']), app)
 
 

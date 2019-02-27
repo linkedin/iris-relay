@@ -7,7 +7,10 @@ import time
 import hmac
 import hashlib
 import base64
-from urllib import urlencode
+try:
+    from urllib import urlencode
+except ImportError:
+    from urllib.parse import urlencode
 from urllib3.connectionpool import HTTPConnectionPool
 
 
@@ -16,7 +19,7 @@ class IrisClient(HTTPConnectionPool):
         super(IrisClient, self).__init__(host, port, **kwargs)
         self.version = version
         self.user = user
-        self.HMAC = hmac.new(api_key, '', hashlib.sha512)
+        self.HMAC = hmac.new(api_key if isinstance(api_key, bytes) else api_key.encode('utf8'), b'', hashlib.sha512)
         self.base_path = '/v%s/' % version if version is not None else '/'
 
     def post(self, endpoint, data, params=None, raw=False, headers=None):
@@ -35,10 +38,12 @@ class IrisClient(HTTPConnectionPool):
         if params:
             path = ''.join([path, '?', urlencode(params)])
         text = '%s %s %s %s' % (window, method, path, body)
+        text = text if isinstance(text, bytes) else text.encode('utf8')
         HMAC.update(text)
         digest = base64.urlsafe_b64encode(HMAC.digest())
 
-        hdrs['Authorization'] = 'hmac %s:' % self.user + digest
+        auth_header = 'hmac %s:' % self.user
+        hdrs['Authorization'] = auth_header if isinstance(auth_header, bytes) else auth_header.encode('utf8') + digest
 
         return self.urlopen(method, path, headers=hdrs, body=body)
 
@@ -51,11 +56,13 @@ class IrisClient(HTTPConnectionPool):
         if params:
             path = ''.join([path, '?', urlencode(params)])
         text = '%s %s %s %s' % (window, method, path, body)
+        text = text if isinstance(text, bytes) else text.encode('utf8')
         HMAC.update(text)
         digest = base64.urlsafe_b64encode(HMAC.digest())
 
+        auth_header = 'hmac %s:' % self.user
         headers = {
             'Content-Type': 'application/json',
-            'Authorization': 'hmac %s:' % self.user + digest
+            'Authorization': auth_header if isinstance(auth_header, bytes) else auth_header.encode('utf8') + digest
         }
         return self.urlopen(method, path, headers=headers)
