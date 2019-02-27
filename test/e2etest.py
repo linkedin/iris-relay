@@ -36,20 +36,22 @@ def test_twilio_phone_say_api():
     re = requests.get(base_url + 'twilio/calls/say?content=hello',
                       headers={'X-Twilio-Signature': signature})
     assert re.status_code == 200
-    assert re.content == (
+    content = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<Response><Say language="en-US" voice="alice">hello</Say>'
         '</Response>')
+    assert re.content == content if isinstance(content, bytes) else content.encode('utf8')
     assert re.headers['content-type'] == 'application/xml'
 
     # Should have the same behavior on post
     re = requests.post(base_url + 'twilio/calls/say?content=hello',
                        headers={'X-Twilio-Signature': signature})
     assert re.status_code == 200
-    assert re.content == (
+    content = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<Response><Say language="en-US" voice="alice">hello</Say>'
         '</Response>')
+    assert re.content == content if isinstance(content, bytes) else content.encode('utf8')
     assert re.headers['content-type'] == 'application/xml'
 
 
@@ -67,7 +69,7 @@ def test_twilio_phone_gather_api():
         },
         headers={'X-Twilio-Signature': 'EgL9vRByfCmVTsAcYRgq3e+nBHw='})
     assert re.status_code == 200
-    assert re.content == (
+    content = (
         '<?xml version="1.0" encoding="UTF-8"?><Response>'
         '<Pause length="2" />'
         '<Say language="en-US" voice="alice">Press pound for menu.</Say>'
@@ -81,6 +83,7 @@ def test_twilio_phone_gather_api():
         ' numDigits="1"><Say language="en-US" voice="alice">bar</Say>'
         '</Gather></Response>'
     ) % host
+    assert re.content == content if isinstance(content, bytes) else content.encode('utf8')
     assert re.headers['content-type'] == 'application/xml'
 
 
@@ -97,7 +100,7 @@ def test_twilio_phone_gather_api_batch_message_id():
         base_url + 'twilio/calls/gather', params=params,
         headers={'X-Twilio-Signature': 'y4SPekGJdZ1oH1k/UHFdf29epbo='})
     assert re.status_code == 200
-    assert re.content == (
+    content = (
         '<?xml version="1.0" encoding="UTF-8"?><Response>'
         '<Pause length="2" />'
         '<Say language="en-US" voice="alice">Press pound for menu.</Say>'
@@ -112,6 +115,7 @@ def test_twilio_phone_gather_api_batch_message_id():
         '<Say language="en-US" loop="3" voice="alice">Press 2 to claim.</Say>'
         '</Gather></Response>'
     ) % (host, fake_batch_id)
+    assert re.content == content if isinstance(content, bytes) else content.encode('utf8')
     assert re.headers['content-type'] == 'application/xml'
 
     params['message_id'] = ['arbitrary text']
@@ -171,7 +175,7 @@ def test_health():
     """
     re = requests.get(host + '/healthcheck')
     assert re.status_code == 200
-    assert re.content == 'GOOD'
+    assert re.content == b'GOOD'
 
 
 def test_gmail_verification():
@@ -182,4 +186,4 @@ def test_gmail_verification():
     # path
     re = requests.get(host + '/googleabcdefg.html')
     assert re.status_code == 200
-    assert re.content == 'google-site-verification: googleabcdefg.html'
+    assert re.content == b'google-site-verification: googleabcdefg.html'

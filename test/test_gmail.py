@@ -44,6 +44,7 @@ def test_is_pointless_messages():
 def test_process_message_text_plain():
     fake_headers = [{u'name': u'Content-Type', u'value': u'text/plain; charset="us-ascii"'}]
     fake_content = 'hello'
+    fake_content = fake_content if isinstance(fake_content, bytes) else fake_content.encode('utf8')
     fake_message = {'payload': {
         'headers': fake_headers,
         'parts': [{'mimeType': 'text/plain', 'body': {'data': urlsafe_b64encode(fake_content)}}]
@@ -62,6 +63,7 @@ def test_process_message_multipart():
         'value': 'multipart/alternative; boundary="===============3481026495533768394=="'
     }]
     fake_content = 'hello'
+    fake_content = fake_content if isinstance(fake_content, bytes) else fake_content.encode('utf8')
     fake_message = {
         'payload': {
             'headers': fake_headers,
