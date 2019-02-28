@@ -12,8 +12,16 @@ from cryptography.fernet import Fernet
 from logging import basicConfig, getLogger
 from importlib import import_module
 import logging
-from urllib import unquote_plus, urlencode, unquote
-import urllib2
+# preserve python 2 and 3 compatibility
+try:
+    from urllib import unquote_plus, urlencode, unquote
+except ImportError:
+    from urllib.parse import unquote_plus, urlencode, unquote
+
+try:
+    import urllib2
+except ImportError:
+    import urllib.request as urllib2
 
 from . import db
 from streql import equals
@@ -56,17 +64,20 @@ def compute_signature(token, uri, post_body, utf=False):
     :returns: The computed signature
     """
     s = uri
+    post_body = post_body if isinstance(post_body, bytes) else post_body.encode('utf8')
     if len(post_body) > 0:
+        p_b_split = post_body.decode().split('&')
         lst = [unquote_plus(kv.replace('=', ''))
-               for kv in sorted(post_body.split('&'))]
+               for kv in sorted(p_b_split)]
         lst.insert(0, s)
         s = ''.join(lst)
 
+    s = s if isinstance(s, bytes) else s.encode('utf8')
+    token = token if isinstance(token, bytes) else token.encode('utf8')
+
     # compute signature and compare signatures
-    if isinstance(s, str):
+    if isinstance(s, bytes):
         mac = hmac.new(token, s, sha1)
-    elif isinstance(s, unicode):
-        mac = hmac.new(token, s.encode("utf-8"), sha1)
     else:
         # Should never happen
         raise TypeError
@@ -305,7 +316,9 @@ class GmailOneClickRelay(object):
         self.config = config
         self.iclient = iclient
         self.data_keys = ('msg_id', 'email_address', 'cmd')  # Order here matters; needs to match what is in iris-api
-        self.hmac = hmac.new(self.config['gmail_one_click_url_key'], '', sha512)
+        key = self.config['gmail_one_click_url_key']
+        key = key if isinstance(key, bytes) else key.encode('utf8')
+        self.hmac = hmac.new(key, b'', sha512)
 
     def on_get(self, req, resp):
         token = req.get_param('token', True)
@@ -333,7 +346,9 @@ class GmailOneClickRelay(object):
 
     def validate_token(self, given_token, data):
         mac = self.hmac.copy()
-        mac.update(' '.join(data[key] for key in self.data_keys))
+        text = ' '.join(data[key] for key in self.data_keys)
+        text = text if isinstance(text, bytes) else text.encode('utf8')
+        mac.update(text)
         return given_token == urlsafe_b64encode(mac.digest())
 
 
@@ -574,9 +589,11 @@ class SlackMessagesRelay(object):
             try:
                 msg_id = int(payload['callback_id'])
             except KeyError as e:
+                logger.error(e)
                 logger.error('callback_id not found in the json payload.')
                 raise falcon.HTTPBadRequest('Bad Request', 'Callback id not found')
             except ValueError as e:
+                logger.error(e)
                 logger.error('Callback ID not an integer: %s', payload['callback_id'])
                 raise falcon.HTTPBadRequest('Bad Request', 'Callback id must be int')
             data = {'msg_id': msg_id,
@@ -753,6 +770,7 @@ class AuthMiddleware(object):
                     post_body = req.context['body']
                     expected_sigs = [compute_signature(t, ''.join(uri), post_body)
                                      for t in self.twilio_auth_token]
+                    sig = sig if isinstance(sig, bytes) else sig.encode('utf8')
                     if sig not in expected_sigs:
                         logger.warning('twilio validation failure: %s not in possible sigs: %s',
                                        sig, expected_sigs)
@@ -787,6 +805,7 @@ class AuthMiddleware(object):
                     if qs:
                         path = path + '?' + qs
                     text = '%s %s %s %s' % (window, method, path, body)
+                    text = text if isinstance(text, bytes) else text.encode('utf8')
 
                     conn = db.connect()
                     cursor = conn.cursor()
@@ -797,6 +816,7 @@ class AuthMiddleware(object):
                     if row is None:
                         raise falcon.HTTPUnauthorized('Authentication failure: server')
                     key = self.fernet.decrypt(str(row[0]))
+                    key = key if isinstance(key, bytes) else key.encode('utf8')
                     req.context['user'] = row[1]
 
                     HMAC = hmac.new(key, text, hashlib.sha512)
@@ -856,6 +876,8 @@ class CORS(object):
             )
             if not allow_headers:
                 allow_headers = '*'
+            if not allow:
+                allow = ''
 
             resp.set_headers((
                 ('Access-Control-Allow-Methods', allow),
@@ -867,7 +889,7 @@ class CORS(object):
 def read_config_from_argv():
     import sys
     if len(sys.argv) < 2:
-        print 'Usage: %s CONFIG_FILE' % sys.argv[0]
+        print(('Usage: %s CONFIG_FILE' % sys.argv[0]))
         sys.exit(1)
 
     with open(sys.argv[1], 'r') as config_file:
@@ -950,7 +972,7 @@ def get_relay_server():
     config = read_config_from_argv()
     app = get_relay_app(config)
     server = config['server']
-    print 'LISTENING: %(host)s:%(port)d' % server
+    print(('LISTENING: %(host)s:%(port)d' % server))
     return WSGIServer((server['host'], server['port']), app)
 
 

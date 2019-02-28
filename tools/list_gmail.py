@@ -8,6 +8,6 @@ from iris_relay.gmail import Gmail
 config = read_config_from_argv()
 gmclient = Gmail(config.get('gmail'), config.get('proxy'))
 
-print 'Fetching unread messages...'
+print('Fetching unread messages...')
 for msg_id_gmail, headers, body in gmclient.list_unread_message():
     print({'body': body, 'headers': headers})
