@@ -876,6 +876,8 @@ class CORS(object):
             )
             if not allow_headers:
                 allow_headers = '*'
+            if not allow:
+                allow = ''
 
             resp.set_headers((
                 ('Access-Control-Allow-Methods', allow),
