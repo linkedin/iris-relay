@@ -25,7 +25,8 @@ except ImportError:
 
 from . import db
 from streql import equals
-from twilio import twiml
+from twilio.twiml.voice_response import VoiceResponse
+from twilio.twiml.messaging_response import MessagingResponse
 from urllib3.exceptions import MaxRetryError
 import yaml
 import falcon
@@ -372,7 +373,7 @@ class TwilioCallsSay(object):
         """
         content = req.get_param('content')
         loop = req.get_param('loop')
-        r = twiml.Response()
+        r = VoiceResponse()
         r.say(content, voice='alice', loop=loop, language="en-US")
         resp.status = falcon.HTTP_200
         resp.body = str(r)
@@ -431,7 +432,7 @@ class TwilioCallsGather(object):
             'message_id': message_id,
         })
 
-        r = twiml.Response()
+        r = VoiceResponse()
         if req.get_param('AnsweredBy') == 'machine':
             logger.info("Voice mail detected for message id: %s", message_id)
             r.say(content, voice='alice', language="en-US", loop=loop)
@@ -457,7 +458,7 @@ class TwilioCallsRelay(object):
 
     @staticmethod
     def return_twixml_call(reason, resp):
-        r = twiml.Response()
+        r = VoiceResponse()
         r.say(reason, voice='alice', loop=2, language="en-US")
         r.hangup()
         resp.status = falcon.HTTP_200
@@ -507,7 +508,7 @@ class TwilioMessagesRelay(object):
 
     @staticmethod
     def return_twixml_message(reason, resp):
-        r = twiml.Response()
+        r = MessagingResponse()
         r.message(reason)
         resp.status = falcon.HTTP_200
         resp.body = str(r)

@@ -20,7 +20,7 @@ setuptools.setup(
         'simplejson==3.8.1',
         'slackclient',
         'streql==3.0.2',
-        'twilio==4.5.0',
+        'twilio==6.25.0',
         'urllib3==1.23',
         'falcon==1.1.0',
         'ujson==1.35',
