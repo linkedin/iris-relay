@@ -40,7 +40,7 @@ def test_twilio_phone_say_api():
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<Response><Say language="en-US" voice="alice">hello</Say>'
         '</Response>')
-    assert re.content == content if isinstance(content, bytes) else content.encode('utf8')
+    assert re.content == content.encode('utf8')
     assert re.headers['content-type'] == 'application/xml'
 
     # Should have the same behavior on post
@@ -51,7 +51,7 @@ def test_twilio_phone_say_api():
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<Response><Say language="en-US" voice="alice">hello</Say>'
         '</Response>')
-    assert re.content == content if isinstance(content, bytes) else content.encode('utf8')
+    assert re.content == content.encode('utf8')
     assert re.headers['content-type'] == 'application/xml'
 
 
@@ -83,7 +83,7 @@ def test_twilio_phone_gather_api():
         ' numDigits="1"><Say language="en-US" voice="alice">bar</Say>'
         '</Gather></Response>'
     ) % host
-    assert re.content == content if isinstance(content, bytes) else content.encode('utf8')
+    assert re.content == content.encode('utf8')
     assert re.headers['content-type'] == 'application/xml'
 
 
@@ -115,7 +115,7 @@ def test_twilio_phone_gather_api_batch_message_id():
         '<Say language="en-US" loop="3" voice="alice">Press 2 to claim.</Say>'
         '</Gather></Response>'
     ) % (host, fake_batch_id)
-    assert re.content == content if isinstance(content, bytes) else content.encode('utf8')
+    assert re.content == content.encode('utf8')
     assert re.headers['content-type'] == 'application/xml'
 
     params['message_id'] = ['arbitrary text']
