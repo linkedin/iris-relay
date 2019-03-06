@@ -25,7 +25,8 @@ except ImportError:
 
 from . import db
 from streql import equals
-from twilio import twiml
+from twilio.twiml.voice_response import VoiceResponse
+from twilio.twiml.messaging_response import MessagingResponse
 from urllib3.exceptions import MaxRetryError
 import yaml
 import falcon
@@ -64,7 +65,6 @@ def compute_signature(token, uri, post_body, utf=False):
     :returns: The computed signature
     """
     s = uri
-    post_body = post_body if isinstance(post_body, bytes) else post_body.encode('utf8')
     if len(post_body) > 0:
         p_b_split = post_body.decode().split('&')
         lst = [unquote_plus(kv.replace('=', ''))
@@ -72,8 +72,8 @@ def compute_signature(token, uri, post_body, utf=False):
         lst.insert(0, s)
         s = ''.join(lst)
 
-    s = s if isinstance(s, bytes) else s.encode('utf8')
-    token = token if isinstance(token, bytes) else token.encode('utf8')
+    s = s.encode('utf8')
+    token = token.encode('utf8')
 
     # compute signature and compare signatures
     if isinstance(s, bytes):
@@ -317,7 +317,7 @@ class GmailOneClickRelay(object):
         self.iclient = iclient
         self.data_keys = ('msg_id', 'email_address', 'cmd')  # Order here matters; needs to match what is in iris-api
         key = self.config['gmail_one_click_url_key']
-        key = key if isinstance(key, bytes) else key.encode('utf8')
+        key = key.encode('utf8')
         self.hmac = hmac.new(key, b'', sha512)
 
     def on_get(self, req, resp):
@@ -347,7 +347,7 @@ class GmailOneClickRelay(object):
     def validate_token(self, given_token, data):
         mac = self.hmac.copy()
         text = ' '.join(data[key] for key in self.data_keys)
-        text = text if isinstance(text, bytes) else text.encode('utf8')
+        text = text.encode('utf8')
         mac.update(text)
         return given_token == urlsafe_b64encode(mac.digest())
 
@@ -372,7 +372,7 @@ class TwilioCallsSay(object):
         """
         content = req.get_param('content')
         loop = req.get_param('loop')
-        r = twiml.Response()
+        r = VoiceResponse()
         r.say(content, voice='alice', loop=loop, language="en-US")
         resp.status = falcon.HTTP_200
         resp.body = str(r)
@@ -431,7 +431,7 @@ class TwilioCallsGather(object):
             'message_id': message_id,
         })
 
-        r = twiml.Response()
+        r = VoiceResponse()
         if req.get_param('AnsweredBy') == 'machine':
             logger.info("Voice mail detected for message id: %s", message_id)
             r.say(content, voice='alice', language="en-US", loop=loop)
@@ -457,7 +457,7 @@ class TwilioCallsRelay(object):
 
     @staticmethod
     def return_twixml_call(reason, resp):
-        r = twiml.Response()
+        r = VoiceResponse()
         r.say(reason, voice='alice', loop=2, language="en-US")
         r.hangup()
         resp.status = falcon.HTTP_200
@@ -507,7 +507,7 @@ class TwilioMessagesRelay(object):
 
     @staticmethod
     def return_twixml_message(reason, resp):
-        r = twiml.Response()
+        r = MessagingResponse()
         r.message(reason)
         resp.status = falcon.HTTP_200
         resp.body = str(r)
@@ -770,7 +770,7 @@ class AuthMiddleware(object):
                     post_body = req.context['body']
                     expected_sigs = [compute_signature(t, ''.join(uri), post_body)
                                      for t in self.twilio_auth_token]
-                    sig = sig if isinstance(sig, bytes) else sig.encode('utf8')
+                    sig = sig.encode('utf8')
                     if sig not in expected_sigs:
                         logger.warning('twilio validation failure: %s not in possible sigs: %s',
                                        sig, expected_sigs)
@@ -805,7 +805,7 @@ class AuthMiddleware(object):
                     if qs:
                         path = path + '?' + qs
                     text = '%s %s %s %s' % (window, method, path, body)
-                    text = text if isinstance(text, bytes) else text.encode('utf8')
+                    text = text.encode('utf8')
 
                     conn = db.connect()
                     cursor = conn.cursor()
@@ -816,7 +816,7 @@ class AuthMiddleware(object):
                     if row is None:
                         raise falcon.HTTPUnauthorized('Authentication failure: server')
                     key = self.fernet.decrypt(str(row[0]))
-                    key = key if isinstance(key, bytes) else key.encode('utf8')
+                    key = key.encode('utf8')
                     req.context['user'] = row[1]
 
                     HMAC = hmac.new(key, text, hashlib.sha512)
