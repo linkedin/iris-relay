@@ -99,6 +99,8 @@ class IDPInitiated(object):
 
     def on_post(self, req, resp, idp_name):
         saml_client = self.saml_manager.saml_client_for(idp_name)
+        if isinstance(req.context['body'], bytes):
+            req.context['body'] = req.context['body'].decode('utf-8')
         form_data = falcon.uri.parse_query_string(req.context['body'])
 
         # Pysaml2 defaults to config-defined encryption keys, but must
@@ -580,6 +582,8 @@ class SlackMessagesRelay(object):
         Accept slack's message from interactive buttons
         """
         try:
+            if isinstance(req.context['body'], bytes):
+                req.context['body'] = req.context['body'].decode('utf-8')
             form_post = falcon.uri.parse_query_string(req.context['body'])
             payload = ujson.loads(form_post['payload'])
             if not self.valid_token(payload['token']):
