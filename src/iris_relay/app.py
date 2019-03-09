@@ -835,7 +835,7 @@ class AuthMiddleware(object):
         elif len(segments) == 1:
             if segments[0] == 'health' or segments[0] == 'healthcheck':
                 return
-            elif segments[0] == self.config.get('gmail').get('verification_code'):
+            elif segments[0] == self.config.get('gmail', {}).get('verification_code'):
                 return
 
         elif segments[0] == 'saml':
