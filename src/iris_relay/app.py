@@ -118,7 +118,7 @@ class IDPInitiated(object):
         if self.username_attr:
             username = authn_response.ava[self.username_attr][0]
         refresh_token = hashlib.sha256(os.urandom(32)).hexdigest()
-        encrypted_token = self.fernet.encrypt(refresh_token)
+        encrypted_token = self.fernet.encrypt(refresh_token.encode('utf-8'))
         exp = time.time() + self.refresh_ttl
         connection = db.connect()
         cursor = connection.cursor()
@@ -158,7 +158,7 @@ class TokenRefresh(object):
         # Username verified in auth middleware
         username = req.context['user']
         access_token = hashlib.sha256(os.urandom(32)).hexdigest()
-        encrypted_token = self.fernet.encrypt(access_token)
+        encrypted_token = self.fernet.encrypt(access_token.encode('utf8'))
         exp = time.time() + self.access_ttl
 
         connection = db.connect()
@@ -803,7 +803,7 @@ class AuthMiddleware(object):
                         raise falcon.HTTPUnauthorized('Authentication failure: invalid header')
                     client_digest = parts['signature']
                     key_id = parts['keyId']
-                    body = req.context['body']
+                    body = req.context['body'].decode('utf8')
                     path = req.env['PATH_INFO']
                     qs = req.env['QUERY_STRING']
                     if qs:
@@ -819,14 +819,14 @@ class AuthMiddleware(object):
                     # make sure that there exists a row for the corresponding username
                     if row is None:
                         raise falcon.HTTPUnauthorized('Authentication failure: server')
-                    key = self.fernet.decrypt(str(row[0]))
-                    key = key.encode('utf8')
+                    key = self.fernet.decrypt(str(row[0]).encode('utf8'))
+                    key = key
                     req.context['user'] = row[1]
 
                     HMAC = hmac.new(key, text, hashlib.sha512)
                     digest = urlsafe_b64encode(HMAC.digest())
 
-                    if hmac.compare_digest(client_digest, digest) and time_diff < self.time_window:
+                    if hmac.compare_digest(client_digest.encode('utf8'), digest) and time_diff < self.time_window:
                         return
                     else:
                         raise falcon.HTTPUnauthorized('Authentication failure: server')
@@ -835,7 +835,7 @@ class AuthMiddleware(object):
         elif len(segments) == 1:
             if segments[0] == 'health' or segments[0] == 'healthcheck':
                 return
-            elif segments[0] == self.config['gmail'].get('verification_code'):
+            elif segments[0] == self.config.get('gmail', {}).get('verification_code'):
                 return
 
         elif segments[0] == 'saml':
