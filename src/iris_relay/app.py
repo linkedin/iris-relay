@@ -12,16 +12,9 @@ from cryptography.fernet import Fernet
 from logging import basicConfig, getLogger
 from importlib import import_module
 import logging
-# preserve python 2 and 3 compatibility
-try:
-    from urllib import unquote_plus, urlencode, unquote
-except ImportError:
-    from urllib.parse import unquote_plus, urlencode, unquote
 
-try:
-    import urllib2
-except ImportError:
-    import urllib.request as urllib2
+from urllib.parse import unquote_plus, urlencode, unquote
+import urllib.request as urllib2
 
 from . import db
 from streql import equals
@@ -99,8 +92,7 @@ class IDPInitiated(object):
 
     def on_post(self, req, resp, idp_name):
         saml_client = self.saml_manager.saml_client_for(idp_name)
-        if isinstance(req.context['body'], bytes):
-            req.context['body'] = req.context['body'].decode('utf-8')
+        req.context['body'] = req.context['body'].decode('utf-8')
         form_data = falcon.uri.parse_query_string(req.context['body'])
 
         # Pysaml2 defaults to config-defined encryption keys, but must
@@ -257,7 +249,7 @@ class GmailRelay(object):
         """
         config = self.config.get('gmail', {})
         token = req.get_param('token')
-        post_body = req.context['body']
+        post_body = req.context['body'].decode('utf-8')
 
         # Verify the request came from Google.
         if token != config.get('token'):
@@ -483,7 +475,7 @@ class TwilioCallsRelay(object):
 
         try:
             path = self.config['iris']['hook']['twilio_calls']
-            re = self.iclient.post(path, req.context['body'], raw=True, params={
+            re = self.iclient.post(path, req.context['body'].decode('utf-8'), raw=True, params={
                 'message_id': message_id
             })
         except MaxRetryError as e:
@@ -521,7 +513,7 @@ class TwilioMessagesRelay(object):
         """
         try:
             path = self.config['iris']['hook']['twilio_messages']
-            re = self.iclient.post(path, req.context['body'], raw=True)
+            re = self.iclient.post(path, req.context['body'].decode('utf-8'), raw=True)
         except MaxRetryError as e:
             logger.error(e.reason)
             self.return_twixml_message('Connection error to web hook.', resp)
@@ -550,7 +542,7 @@ class TwilioDeliveryStatus(object):
         """
 
         try:
-            re = self.iclient.post(self.endpoint, req.context['body'], raw=True)
+            re = self.iclient.post(self.endpoint, req.context['body'].decode('utf-8'), raw=True)
         except MaxRetryError:
             logger.exception('Failed posting data to iris-api')
             raise falcon.HTTPInternalServerError('Internal Server Error', 'API call failed')
@@ -582,8 +574,7 @@ class SlackMessagesRelay(object):
         Accept slack's message from interactive buttons
         """
         try:
-            if isinstance(req.context['body'], bytes):
-                req.context['body'] = req.context['body'].decode('utf-8')
+            req.context['body'].decode('utf-8')
             form_post = falcon.uri.parse_query_string(req.context['body'])
             payload = ujson.loads(form_post['payload'])
             if not self.valid_token(payload['token']):
@@ -676,7 +667,7 @@ class MobileSink(object):
             if req.method == 'POST':
                 body = ''
                 if req.context['body']:
-                    body = req.context['body']
+                    body = req.context['body'].decode('utf-8')
                 result = self.mobile_client.post(path, body)
             elif req.method == 'GET':
                 result = self.mobile_client.get(path)
@@ -703,7 +694,7 @@ class RegisterDevice(object):
         self.iris = iris_client
 
     def on_post(self, req, resp):
-        data = ujson.loads(req.context['body'])
+        data = ujson.loads(req.context['body'].decode('utf-8'))
         data['username'] = req.context['user']
         result = self.iris.post('devices', data)
         if result.status == 400:
