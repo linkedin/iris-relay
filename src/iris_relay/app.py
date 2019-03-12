@@ -574,7 +574,7 @@ class SlackMessagesRelay(object):
         Accept slack's message from interactive buttons
         """
         try:
-            req.context['body'].decode('utf-8')
+            req.context['body'] = req.context['body'].decode('utf-8')
             form_post = falcon.uri.parse_query_string(req.context['body'])
             payload = ujson.loads(form_post['payload'])
             if not self.valid_token(payload['token']):
