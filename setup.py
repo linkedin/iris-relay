@@ -12,8 +12,9 @@ setuptools.setup(
     include_package_data=True,
     install_requires=[
         'PyOpenSSL==18.0.0',
-        'PyYAML==3.11',
-        'gevent==1.1.2',
+        'PyYAML==3.13',
+        'gevent==1.4.0',
+        'requests-futures==0.9.9',
         # TODO: update google client
         'google-api-python-client==1.4.2',
         'oauth2client==1.4.12',
