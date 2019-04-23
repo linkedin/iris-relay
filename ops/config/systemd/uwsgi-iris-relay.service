@@ -1,0 +1,13 @@
+[Unit]
+Description=iris-relay uWSGI app
+After=syslog.target
+
+[Service]
+ExecStart=/bin/bash -c 'cd /home/iris-relay && source ./env/bin/activate && DOCKER_DB_BOOTSTRAP=1 python ./entrypoint.py'
+User=iris-relay
+Group=iris-relay
+Restart=on-failure
+KillSignal=SIGQUIT
+Type=simple
+StandardError=syslog
+NotifyAccess=all

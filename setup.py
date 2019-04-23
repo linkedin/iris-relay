@@ -12,19 +12,24 @@ setuptools.setup(
     include_package_data=True,
     install_requires=[
         'PyOpenSSL==18.0.0',
+        'pysaml2==4.4.0',
         'PyYAML==3.13',
         'gevent==1.4.0',
+        'requests==2.20.1',
         'requests-futures==0.9.9',
         # TODO: update google client
         'google-api-python-client==1.4.2',
+        'SQLAlchemy==1.2.0',
+        'PyMySQL==0.7.11',
         'oauth2client==1.4.12',
         'simplejson==3.8.1',
-        'slackclient',
+        'slackclient==0.16',
         'streql==3.0.2',
         'twilio==6.25.0',
         'urllib3==1.23',
         'falcon==1.1.0',
         'ujson==1.35',
+        'irisclient==1.3.0'
     ],
     entry_points={
         'console_scripts': [

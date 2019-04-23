@@ -1,0 +1,11 @@
+[Unit]
+Description=Socket for uWSGI app iris-relay
+
+[Socket]
+ListenStream=/home/iris-relay/var/run/uwsgi.sock
+SocketUser=iris-relay
+SocketGroup=iris-relay
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target

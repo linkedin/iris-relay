@@ -1,0 +1,41 @@
+prod:
+    plugins: python3,logfile
+    chdir: /home/iris-relay/source/src
+    socket: /home/iris-relay/var/run/uwsgi.sock
+    chmod-socket: 666
+    master: True
+    # set the following two settings if you are running under root
+    # uid: 1000
+    # gid: 1000
+    workers: 12
+    master-fifo: /home/iris-relay/var/run/uwsgi_master_fifo
+    touch-reload: /home/iris-relay/var/run/uwsgi_touch_reload
+    stats: /home/iris-relay/var/run/uwsgi_stats.sock
+    pidfile: /home/iris-relay/var/run/uwsgi.pid
+    module: iris_relay.app:get_relay_app()
+    virtualenv: /home/iris-relay/env
+    pyargv: /home/iris-relay/config/config.yaml
+    buffer-size: 32768
+
+    # Enable memory reporting
+    memory-report: true
+
+    # Logging
+    logformat: '%(ltime) [%(status)] %(method) %(uri) %(addr) [%(uagent)] RT:%(msecs) REF:%(referer) SZ:%(size) %(proto)'
+    log-4xx: true
+    log-5xx: true
+    log-x-forwarded-for: true
+    log-slow: 1500
+
+    # access log
+    req-logger: file:/home/iris-relay/var/log/uwsgi/access.log
+
+    # error log
+    logger: file:/home/iris-relay/var/log/uwsgi/error.log
+
+    # put timestamp in the error log
+    logdate: true
+
+    # control nginx and iris-relay scheduler/notifier
+    attach-daemon2:
+      - cmd=/usr/sbin/nginx -c /home/iris-relay/daemons/nginx.conf,pidfile=/home/iris-relay/var/run/nginx.pid

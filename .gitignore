@@ -14,3 +14,6 @@ var
 /src/iris_relay.egg-info
 /env
 /venv
+/ops/packer/output
+.idea
+.vscode

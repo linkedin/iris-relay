@@ -726,10 +726,13 @@ class AuthMiddleware(object):
             self.twilio_auth_token = token
         else:
             self.twilio_auth_token = [token]
+        self.debug = False
         if self.config['server'].get('debug'):
-            self.auth = lambda x: True
+            self.debug = True
 
     def process_request(self, req, resp):
+        if self.debug:
+            return
         # CORS Pre-flight
         if req.method == 'OPTIONS':
             resp.status = falcon.HTTP_204
