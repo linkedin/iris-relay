@@ -1,0 +1,13 @@
+[Unit]
+Description=nginx proxy for uwsgi-iris-relay
+After=syslog.target
+
+[Service]
+ExecStart=/usr/sbin/nginx -c /home/iris-relay/daemons/nginx.conf
+User=iris-relay
+Group=iris-relay
+Restart=on-failure
+KillSignal=SIGQUIT
+Type=simple
+StandardError=syslog
+NotifyAccess=all

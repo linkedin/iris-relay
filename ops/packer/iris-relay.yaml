@@ -1,0 +1,80 @@
+variables:
+  app_name: "iris-relay"
+  app_version: ""
+  git_tag: "master"
+
+builders:
+  - type: "docker"
+    image: "ubuntu:16.04"
+    changes:
+      - 'EXPOSE 8080'
+      - 'CMD ["sudo", "-EHu", "iris-relay", "bash", "-c", "source /home/iris-relay/env/bin/activate && python /home/iris-relay/entrypoint.py"]'
+    commit: True
+
+provisioners:
+  - type: "shell"
+    inline:
+      - mkdir /tmp/repo
+
+  - type: "file"
+    source: "../../src"
+    destination: "/tmp/repo"
+
+  - type: "file"
+    source: "../../setup.py"
+    destination: "/tmp/repo/setup.py"
+
+  - type: "file"
+    source: "../../db"
+    destination: "/tmp/repo"
+
+  - type: "file"
+    source: "../../ops"
+    destination: "/tmp/repo"
+
+  - type: "file"
+    source: "../../configs"
+    destination: "/tmp/repo"
+
+  - type: "shell"
+    only: ["docker"]
+    inline:
+      - "apt-get update && apt-get -y install sudo"
+
+  - type: "shell"
+    inline:
+      - sudo apt-get -y install curl python-pip python-dev python3-pip uwsgi unzip python3-venv sudo python3-dev libyaml-dev libsasl2-dev libldap2-dev nginx uwsgi-plugin-python3 mysql-client xmlsec1 libssl-dev
+      - sudo rm -rf /var/cache/apt/archives/*
+      - sudo useradd -m -s /bin/bash iris-relay
+      - sudo chown -R iris-relay:iris-relay /home/iris-relay /var/log/nginx /var/lib/nginx
+      - sudo -Hu iris-relay mkdir -p /home/iris-relay/var/log/uwsgi /home/iris-relay/var/log/nginx /home/iris-relay/var/run
+      - sudo mv /tmp/repo /home/iris-relay/source
+      - "sudo chown -R iris-relay:iris-relay /home/iris-relay/source"
+      - sudo mv /home/iris-relay/source/ops/config/systemd/uwsgi-iris-relay.service /etc/systemd/system/uwsgi-iris-relay.service
+      - sudo mv /home/iris-relay/source/ops/config/systemd/nginx-iris-relay.service /etc/systemd/system/nginx-iris-relay.service
+      - sudo mv /home/iris-relay/source/ops/config/systemd/nginx-iris-relay.socket /etc/systemd/system/nginx-iris-relay.socket
+      - sudo -Hu iris-relay ln -s /home/iris-relay/source/ops/daemons /home/iris-relay/daemons
+      - sudo -Hu iris-relay ln -s /home/iris-relay/source/ops/entrypoint.py /home/iris-relay/entrypoint.py
+      - sudo -Hu iris-relay ln -s /home/iris-relay/source/db /home/iris-relay/db
+      - sudo -Hu iris-relay mkdir /home/iris-relay/config
+      - sudo -Hu iris-relay cp /home/iris-relay/source/configs/config.dev.yaml /home/iris-relay/config/config.yaml
+      - sudo -Hu iris-relay python3 -m venv /home/iris-relay/env
+      - sudo -Hu iris-relay /bin/bash -c 'source /home/iris-relay/env/bin/activate && cd /home/iris-relay/source && pip install .'
+      # Set up healthcheck to return GOOD
+      - sudo echo "GOOD" > /tmp/relay_health
+
+  - type: "shell"
+    only: ["docker"]
+    inline:
+      - "sudo -Hu iris-relay mv -f /home/iris-relay/daemons/uwsgi-docker.yaml /home/iris-relay/daemons/uwsgi.yaml"
+
+post-processors:
+  - type: "docker-tag"
+    repository: "quay.io/iris/iris-relay"
+    tag: "{{ user `app_version` }}"
+    only: ["docker"]
+
+  - type: "docker-tag"
+    repository: "quay.io/iris/iris-relay"
+    tag: "latest"
+    only: ["docker"]

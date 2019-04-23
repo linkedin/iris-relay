@@ -1,3 +1,5 @@
+USE iris;
+
 CREATE TABLE IF NOT EXISTS `access_token` (
   `id` BIGINT(20) NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) NOT NULL,
