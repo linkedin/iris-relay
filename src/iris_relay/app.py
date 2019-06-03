@@ -33,6 +33,7 @@ from iris_relay.gmail import Gmail
 from iris_relay.saml import SAML
 
 from irisclient import IrisClient as MobileClient
+from oncallclient import OncallClient
 
 logger = getLogger(__name__)
 
@@ -660,7 +661,7 @@ class MobileSink(object):
         self.base_url = base_url
 
     def __call__(self, req, resp):
-        path = self.base_url + '/v0/' + '/'.join(req.path.split('/')[4:])
+        path = self.base_url + '/v0/' + '/'.join(req.path.split('/')[5:])
         if req.query_string:
             path += '?%s' % req.query_string
         try:
@@ -675,6 +676,36 @@ class MobileSink(object):
                 return
             else:
                 raise falcon.HTTPMethodNotAllowed(['GET', 'POST', 'PUT', 'DELETE'])
+        except MaxRetryError as e:
+            logger.error(e.reason)
+            raise falcon.HTTPInternalServerError('Internal Server Error', 'Max retry error, api unavailable')
+        if result.status_code == 400:
+            raise falcon.HTTPBadRequest('Bad Request', '')
+        elif str(result.status_code)[0] != '2':
+            raise falcon.HTTPInternalServerError('Internal Server Error', 'Unknown response from the api')
+        else:
+            resp.status = falcon.HTTP_200
+            resp.content_type = result.headers['Content-Type']
+            resp.body = result.content
+
+
+class OncallSink(object):
+
+    def __init__(self, mobile_client, base_url):
+        self.mobile_client = mobile_client
+        self.base_url = base_url
+
+    def __call__(self, req, resp):
+        path = self.base_url + '/api/v0/' + '/'.join(req.path.split('/')[5:])
+        if req.query_string:
+            path += '?%s' % req.query_string
+        try:
+            if req.method == 'GET':
+                result = self.mobile_client.get(path)
+            elif req.method == 'OPTIONS':
+                return
+            else:
+                raise falcon.HTTPMethodNotAllowed(['GET', 'OPTIONS'])
         except MaxRetryError as e:
             logger.error(e.reason)
             raise falcon.HTTPInternalServerError('Internal Server Error', 'Max retry error, api unavailable')
@@ -773,7 +804,7 @@ class AuthMiddleware(object):
                     return
                 elif self.mobile and segments[2] == 'mobile':
                     # Only allow refresh tokens for /refresh, only access for all else
-                    table = 'refresh_token' if segments[3] == 'refresh' else 'access_token'
+                    table = 'refresh_token' if segments[4] == 'refresh' else 'access_token'
                     key_query = '''SELECT `key`, `target`.`name`
                                    FROM `%s` JOIN `target` ON `user_id` = `target`.`id`
                                    WHERE `%s`.`id` = %%s
@@ -945,10 +976,18 @@ def get_relay_app(config=None):
                                      api_host=mobile_cfg['host'],
                                      key=mobile_cfg['api_key'])
 
+        mobile_oncall_client = OncallClient(
+            app='SERVICE_FOO',
+            key='oncall_API_KEY',
+            api_host='http://localhost:8080')
+
         mobile_sink = MobileSink(mobile_client, mobile_cfg['host'])
-        app.add_sink(mobile_sink, prefix='/api/v0/mobile/')
+        oncall_sink = OncallSink(mobile_oncall_client, mobile_cfg['oncall']['host'])
+        app.add_sink(oncall_sink, prefix='/api/v0/mobile/oncall/')
+        app.add_sink(mobile_sink, prefix='/api/v0/mobile/iris/')
         app.add_route('/saml/login/{idp_name}', SPInitiated(saml))
         app.add_route('/saml/sso/{idp_name}', IDPInitiated(mobile_cfg.get('auth'), saml))
+        app.add_route('/api/v0/mobile/iris/refresh', TokenRefresh(mobile_cfg.get('auth')))
         app.add_route('/api/v0/mobile/refresh', TokenRefresh(mobile_cfg.get('auth')))
         app.add_route('/api/v0/mobile/device', RegisterDevice(iclient))
 
