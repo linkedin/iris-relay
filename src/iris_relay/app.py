@@ -668,7 +668,7 @@ class MobileSink(object):
             if req.method == 'POST':
                 body = b''
                 if req.context['body']:
-                    body = req.context['body'].decode('utf-8')
+                    body = req.context['body']
                 result = self.mobile_client.post(path, body)
             elif req.method == 'GET':
                 result = self.mobile_client.get(path)
