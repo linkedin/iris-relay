@@ -976,8 +976,8 @@ def get_relay_app(config=None):
     if mobile_cfg.get('activated'):
         db.init(config['db'])
         mobile_iris_client = IrisMobileClient(app=mobile_cfg.get('relay_app_name', 'iris-relay'),
-                                     api_host=mobile_cfg['host'],
-                                     key=mobile_cfg['api_key'])
+                                              api_host=mobile_cfg['host'],
+                                              key=mobile_cfg['api_key'])
 
         mobile_oncall_client = OncallClient(
             app=mobile_cfg.get('relay_app_name', 'iris-relay'),
