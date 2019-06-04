@@ -32,7 +32,7 @@ from iris_relay.client import IrisClient
 from iris_relay.gmail import Gmail
 from iris_relay.saml import SAML
 
-from irisclient import IrisClient as MobileClient
+from irisclient import IrisClient as IrisMobileClient
 from oncallclient import OncallClient
 
 logger = getLogger(__name__)
@@ -654,14 +654,14 @@ class GmailVerification(object):
         resp.body = self.msg
 
 
-class MobileSink(object):
+class IrisMobileSink(object):
 
-    def __init__(self, mobile_client, base_url):
-        self.mobile_client = mobile_client
+    def __init__(self, iris_client, base_url):
+        self.iris_client = iris_client
         self.base_url = base_url
 
     def __call__(self, req, resp):
-        path = self.base_url + '/v0/' + '/'.join(req.path.split('/')[5:])
+        path = self.base_url + '/v0/' + '/'.join(req.path.split('/')[4:])
         if req.query_string:
             path += '?%s' % req.query_string
         try:
@@ -669,9 +669,9 @@ class MobileSink(object):
                 body = b''
                 if req.context['body']:
                     body = req.context['body']
-                result = self.mobile_client.post(path, body)
+                result = self.iris_client.post(path, body)
             elif req.method == 'GET':
-                result = self.mobile_client.get(path)
+                result = self.iris_client.get(path)
             elif req.method == 'OPTIONS':
                 return
             else:
@@ -689,19 +689,19 @@ class MobileSink(object):
             resp.body = result.content
 
 
-class OncallSink(object):
+class OncallMobileSink(object):
 
-    def __init__(self, mobile_client, base_url):
-        self.mobile_client = mobile_client
+    def __init__(self, oncall_client, base_url):
+        self.oncall_client = oncall_client
         self.base_url = base_url
 
     def __call__(self, req, resp):
-        path = self.base_url + '/api/v0/' + '/'.join(req.path.split('/')[5:])
+        path = self.base_url + '/api/v0/' + '/'.join(req.path.split('/')[4:])
         if req.query_string:
             path += '?%s' % req.query_string
         try:
             if req.method == 'GET':
-                result = self.mobile_client.get(path)
+                result = self.oncall_client.get(path)
             elif req.method == 'OPTIONS':
                 return
             else:
@@ -805,9 +805,9 @@ class AuthMiddleware(object):
                                        sig, expected_sigs)
                         raise falcon.HTTPUnauthorized('Access denied', 'Twilio auth failure', [])
                     return
-                elif self.mobile and segments[2] == 'mobile':
+                elif self.mobile and (segments[2] == 'mobile' or segments[2] == 'oncall'):
                     # Only allow refresh tokens for /refresh, only access for all else
-                    table = 'refresh_token' if segments[4] == 'refresh' else 'access_token'
+                    table = 'refresh_token' if segments[3] == 'refresh' else 'access_token'
                     key_query = '''SELECT `key`, `target`.`name`
                                    FROM `%s` JOIN `target` ON `user_id` = `target`.`id`
                                    WHERE `%s`.`id` = %%s
@@ -975,7 +975,7 @@ def get_relay_app(config=None):
     mobile_cfg = config.get('iris-mobile', {})
     if mobile_cfg.get('activated'):
         db.init(config['db'])
-        mobile_client = MobileClient(app=mobile_cfg.get('relay_app_name', 'iris-relay'),
+        mobile_iris_client = IrisMobileClient(app=mobile_cfg.get('relay_app_name', 'iris-relay'),
                                      api_host=mobile_cfg['host'],
                                      key=mobile_cfg['api_key'])
 
@@ -984,13 +984,12 @@ def get_relay_app(config=None):
             key=mobile_cfg['oncall']['api_key'],
             api_host=mobile_cfg['oncall']['host'])
 
-        mobile_sink = MobileSink(mobile_client, mobile_cfg['host'])
-        oncall_sink = OncallSink(mobile_oncall_client, mobile_cfg['oncall']['host'])
-        app.add_sink(oncall_sink, prefix='/api/v0/mobile/oncall/')
-        app.add_sink(mobile_sink, prefix='/api/v0/mobile/iris/')
+        iris_mobile_sink = IrisMobileSink(mobile_iris_client, mobile_cfg['host'])
+        oncall_mobile_sink = OncallMobileSink(mobile_oncall_client, mobile_cfg['oncall']['host'])
+        app.add_sink(oncall_mobile_sink, prefix='/api/v0/oncall/')
+        app.add_sink(iris_mobile_sink, prefix='/api/v0/mobile')
         app.add_route('/saml/login/{idp_name}', SPInitiated(saml))
         app.add_route('/saml/sso/{idp_name}', IDPInitiated(mobile_cfg.get('auth'), saml))
-        app.add_route('/api/v0/mobile/iris/refresh', TokenRefresh(mobile_cfg.get('auth')))
         app.add_route('/api/v0/mobile/refresh', TokenRefresh(mobile_cfg.get('auth')))
         app.add_route('/api/v0/mobile/device', RegisterDevice(iclient))
 
