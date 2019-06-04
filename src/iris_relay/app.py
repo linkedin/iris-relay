@@ -980,9 +980,9 @@ def get_relay_app(config=None):
                                      key=mobile_cfg['api_key'])
 
         mobile_oncall_client = OncallClient(
-            app='SERVICE_FOO',
-            key='oncall_API_KEY',
-            api_host='http://localhost:8080')
+            app=mobile_cfg.get('relay_app_name', 'iris-relay'),
+            key=mobile_cfg['oncall']['api_key'],
+            api_host=mobile_cfg['oncall']['host'])
 
         mobile_sink = MobileSink(mobile_client, mobile_cfg['host'])
         oncall_sink = OncallSink(mobile_oncall_client, mobile_cfg['oncall']['host'])
