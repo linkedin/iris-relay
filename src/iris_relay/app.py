@@ -987,7 +987,7 @@ def get_relay_app(config=None):
         iris_mobile_sink = IrisMobileSink(mobile_iris_client, mobile_cfg['host'])
         oncall_mobile_sink = OncallMobileSink(mobile_oncall_client, mobile_cfg['oncall']['host'])
         app.add_sink(oncall_mobile_sink, prefix='/api/v0/oncall/')
-        app.add_sink(iris_mobile_sink, prefix='/api/v0/mobile')
+        app.add_sink(iris_mobile_sink, prefix='/api/v0/mobile/')
         app.add_route('/saml/login/{idp_name}', SPInitiated(saml))
         app.add_route('/saml/sso/{idp_name}', IDPInitiated(mobile_cfg.get('auth'), saml))
         app.add_route('/api/v0/mobile/refresh', TokenRefresh(mobile_cfg.get('auth')))
