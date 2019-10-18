@@ -12,7 +12,7 @@ setuptools.setup(
     include_package_data=True,
     install_requires=[
         'PyOpenSSL==18.0.0',
-        'pysaml2==4.4.0',
+        'pysaml2==4.6.0',
         'PyYAML==3.13',
         'gevent==1.4.0',
         'requests==2.20.1',
@@ -26,7 +26,7 @@ setuptools.setup(
         'slackclient==0.16',
         'streql==3.0.2',
         'twilio==6.25.0',
-        'urllib3==1.23',
+        'urllib3==1.24.2',
         'falcon==1.1.0',
         'ujson==1.35',
         'irisclient==1.3.0'
