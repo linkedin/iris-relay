@@ -12,7 +12,7 @@ setuptools.setup(
     include_package_data=True,
     install_requires=[
         'PyOpenSSL==18.0.0',
-        'pysaml2==4.4.0',
+        'pysaml2==4.6.0',
         'PyYAML==3.13',
         'gevent==1.4.0',
         'requests==2.20.1',
