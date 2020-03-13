@@ -222,6 +222,8 @@ class OncallCalendarRelay(object):
         result = self.oncall_client.get('ical/' + ical_key)
         if result.status == 200:
             resp.status = falcon.HTTP_200
+        elif 500 <= result.status <= 599:
+            resp.status = falcon.HTTP_503
         else:
             resp.status = falcon.HTTP_404
         resp.content_type = result.headers['Content-Type']
