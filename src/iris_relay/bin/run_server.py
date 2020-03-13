@@ -7,7 +7,6 @@ import sys
 import yaml
 import multiprocessing
 import gunicorn.app.base
-from gunicorn.six import iteritems
 
 
 class StandaloneApplication(gunicorn.app.base.BaseApplication):
@@ -18,9 +17,9 @@ class StandaloneApplication(gunicorn.app.base.BaseApplication):
         super(StandaloneApplication, self).__init__()
 
     def load_config(self):
-        config = {key: value for key, value in iteritems(self.options)
+        config = {key: value for key, value in self.options.items()
                   if key in self.cfg.settings and value is not None}
-        for key, value in iteritems(config):
+        for key, value in config.items():
             self.cfg.set(key.lower(), value)
 
     def load(self):
