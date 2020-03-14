@@ -17,8 +17,7 @@ setuptools.setup(
         'gevent==1.4.0',
         'requests==2.23.0',
         'requests-futures==0.9.9',
-        # TODO: update google client
-        'google-api-python-client==1.4.2',
+        'google-api-python-client==1.6.2',
         'SQLAlchemy==1.2.0',
         'PyMySQL==0.7.11',
         'oauth2client==1.4.12',
@@ -29,7 +28,8 @@ setuptools.setup(
         'urllib3==1.25.6',
         'falcon==1.1.0',
         'ujson==1.35',
-        'irisclient==1.3.0'
+        'irisclient==1.3.0',
+        'oncallclient==1.1.0',
     ],
     entry_points={
         'console_scripts': [
