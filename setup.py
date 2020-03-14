@@ -20,7 +20,7 @@ setuptools.setup(
         'google-api-python-client==1.6.2',
         'SQLAlchemy==1.2.0',
         'PyMySQL==0.7.11',
-        'oauth2client==1.4.12',
+        'oauth2client==1.5.2',
         'simplejson==3.8.1',
         'slackclient==0.16',
         'streql==3.0.2',
