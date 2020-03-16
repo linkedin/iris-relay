@@ -43,7 +43,7 @@ setuptools.setup(
         'slackclient==0.16',
         'streql==3.0.2',
         'twilio==6.25.0',
-        'urllib3==1.25.6',
+        'urllib3==1.25.8',
         'falcon==1.1.0',
         'ujson==1.35',
         'irisclient==1.3.0',
