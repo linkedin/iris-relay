@@ -17,7 +17,7 @@ from urllib3.connectionpool import HTTPConnectionPool
 
 class IrisClient(HTTPConnectionPool):
     def __init__(self, host, port, user, api_key, version=0, **kwargs):
-        super(IrisClient, self).__init__(host, port, **kwargs)
+        super().__init__(host, port, **kwargs)
         self.version = version
         self.user = user
         self.HMAC = hmac.new(api_key.encode('utf8'), b'', hashlib.sha512)
@@ -67,3 +67,15 @@ class IrisClient(HTTPConnectionPool):
             'Authorization': auth_header.encode('utf8') + digest
         }
         return self.urlopen(method, path, headers=headers)
+
+
+class OncallClient(HTTPConnectionPool):
+    def __init__(self, host, port, version=0, **kwargs):
+        super().__init__(host, port, **kwargs)
+        self.base_path = '/api/v%s/' % version
+
+    def get(self, endpoint, params=None):
+        path = self.base_path + endpoint
+        if params:
+            path = ''.join([path, '?', urlencode(params)])
+        return self.urlopen('GET', path)

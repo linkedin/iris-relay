@@ -28,12 +28,12 @@ import falcon.uri
 import os
 from saml2 import entity
 
-from iris_relay.client import IrisClient
+from iris_relay.client import IrisClient, OncallClient
 from iris_relay.gmail import Gmail
 from iris_relay.saml import SAML
 
 from irisclient import IrisClient as IrisMobileClient
-from oncallclient import OncallClient
+from oncallclient import OncallClient as OncallMobileClient
 
 logger = getLogger(__name__)
 
@@ -205,6 +205,29 @@ class SPInitiated(object):
         resp.set_header('Pragma', 'no-cache')
         resp.set_header('Location', redirect_url)
         resp.status = falcon.HTTP_302
+
+
+class OncallCalendarRelay(object):
+    def __init__(self, config, oncall_client):
+        self.config = config
+        self.oncall_client = oncall_client
+
+    def on_get(self, req, resp, ical_key):
+        """Access the oncall calendar identified by the key.
+
+        The response is in ical format and this url is intended to be
+        supplied to any calendar application that can subscribe to
+        calendars from the internet.
+        """
+        result = self.oncall_client.get('ical/' + ical_key)
+        if result.status == 200:
+            resp.status = falcon.HTTP_200
+        elif 500 <= result.status <= 599:
+            resp.status = falcon.HTTP_503
+        else:
+            resp.status = falcon.HTTP_404
+        resp.content_type = result.headers['Content-Type']
+        resp.body = result.data
 
 
 class GmailRelay(object):
@@ -855,7 +878,7 @@ class AuthMiddleware(object):
                         return
                     else:
                         raise falcon.HTTPUnauthorized('Authentication failure: server')
-                elif segments[2] == 'gmail' or segments[2] == 'gmail-oneclick' or segments[2] == 'slack':
+                elif segments[2] == 'gmail' or segments[2] == 'gmail-oneclick' or segments[2] == 'slack' or segments[2] == 'ical':
                     return
         elif len(segments) == 1:
             if segments[0] == 'health' or segments[0] == 'healthcheck':
@@ -933,6 +956,9 @@ def get_relay_app(config=None):
     if not config:
         config = read_config_from_argv()
 
+    oncall_client = OncallClient(config['oncall']['host'],
+                                 config['oncall']['port'])
+
     iclient = IrisClient(config['iris']['host'],
                          config['iris']['port'],
                          config['iris'].get('relay_app_name', 'iris-relay'),
@@ -943,6 +969,9 @@ def get_relay_app(config=None):
     # authentication uses the post body
     cors = CORS(config.get('allow_origins_list', []))
     app = falcon.API(middleware=[ReqBodyMiddleware(), AuthMiddleware(config), cors])
+
+    ical_relay = OncallCalendarRelay(config, oncall_client)
+    app.add_route('/api/v0/ical/{ical_key}', ical_relay)
 
     gmail_config = config.get('gmail')
     if gmail_config:
@@ -979,7 +1008,7 @@ def get_relay_app(config=None):
                                               api_host=mobile_cfg['host'],
                                               key=mobile_cfg['api_key'])
 
-        mobile_oncall_client = OncallClient(
+        mobile_oncall_client = OncallMobileClient(
             app=mobile_cfg.get('relay_app_name', 'iris-relay'),
             key=mobile_cfg['oncall']['api_key'],
             api_host=mobile_cfg['oncall']['host'])

@@ -30,6 +30,9 @@ iris:
     twilio_messages: 'response/twilio/messages'
     twilio_status: 'twilio/deliveryupdate'
     slack: 'response/slack'
+oncall:
+  host: localhost
+  port: 8080
 iris-mobile:
   relay_app_name: 'iris-mobile'
   activated: True
