@@ -6,7 +6,7 @@ import setuptools
 import re
 
 
-with open('src/iris/__init__.py', 'r') as fd:
+with open('src/iris_relay/__init__.py', 'r') as fd:
     version = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', fd.read(), re.MULTILINE).group(1)
 
 with open('README.md', 'r') as fd:
