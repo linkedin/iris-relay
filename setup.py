@@ -39,7 +39,7 @@ setuptools.setup(
         'SQLAlchemy==1.2.0',
         'PyMySQL==0.7.11',
         'oauth2client==1.5.2',
-        'simplejson==3.8.1',
+        'simplejson',
         'slackclient==0.16',
         'streql==3.0.2',
         'twilio==6.25.0',
