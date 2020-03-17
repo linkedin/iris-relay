@@ -29,7 +29,6 @@ setuptools.setup(
     packages=setuptools.find_packages('src'),
     include_package_data=True,
     install_requires=[
-        'PyOpenSSL==18.0.0',
         'pysaml2==4.8.0',
         'PyYAML',
         'gevent==1.4.0',
