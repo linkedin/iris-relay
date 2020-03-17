@@ -67,15 +67,3 @@ class IrisClient(HTTPConnectionPool):
             'Authorization': auth_header.encode('utf8') + digest
         }
         return self.urlopen(method, path, headers=headers)
-
-
-class OncallClient(HTTPConnectionPool):
-    def __init__(self, host, port, version=0, **kwargs):
-        super().__init__(host, port, **kwargs)
-        self.base_path = '/api/v%s/' % version
-
-    def get(self, endpoint, params=None):
-        path = self.base_path + endpoint
-        if params:
-            path = ''.join([path, '?', urlencode(params)])
-        return self.urlopen('GET', path)
