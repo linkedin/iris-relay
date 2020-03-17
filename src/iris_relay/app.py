@@ -20,6 +20,7 @@ from . import db
 from streql import equals
 from twilio.twiml.voice_response import VoiceResponse
 from twilio.twiml.messaging_response import MessagingResponse
+from urllib3.connectionpool import connection_from_url
 from urllib3.exceptions import MaxRetryError
 import yaml
 import falcon
@@ -28,7 +29,7 @@ import falcon.uri
 import os
 from saml2 import entity
 
-from iris_relay.client import IrisClient, OncallClient
+from iris_relay.client import IrisClient
 from iris_relay.gmail import Gmail
 from iris_relay.saml import SAML
 
@@ -208,9 +209,9 @@ class SPInitiated(object):
 
 
 class OncallCalendarRelay(object):
-    def __init__(self, config, oncall_client):
+    def __init__(self, config, oncall_base_url):
         self.config = config
-        self.oncall_client = oncall_client
+        self.oncall_conn = connection_from_url(oncall_base_url)
 
     def on_get(self, req, resp, ical_key):
         """Access the oncall calendar identified by the key.
@@ -219,15 +220,21 @@ class OncallCalendarRelay(object):
         supplied to any calendar application that can subscribe to
         calendars from the internet.
         """
-        result = self.oncall_client.get('ical/' + ical_key)
-        if result.status == 200:
-            resp.status = falcon.HTTP_200
-        elif 500 <= result.status <= 599:
-            resp.status = falcon.HTTP_503
+        try:
+            result = self.oncall_conn.request('GET', '/api/v0/ical/' + ical_key)
+        except MaxRetryError as ex:
+            logger.error(ex.reason)
         else:
-            resp.status = falcon.HTTP_404
-        resp.content_type = result.headers['Content-Type']
-        resp.body = result.data
+            if result.status == 200:
+                resp.status = falcon.HTTP_200
+                resp.content_type = result.headers['Content-Type']
+                resp.body = result.data
+                return
+            elif 400 <= result.status <= 499:
+                resp.status = falcon.HTTP_404
+                return
+
+        raise falcon.HTTPInternalServerError('Internal Server Error', 'Invalid response from API')
 
 
 class GmailRelay(object):
@@ -956,9 +963,6 @@ def get_relay_app(config=None):
     if not config:
         config = read_config_from_argv()
 
-    oncall_client = OncallClient(config['oncall']['host'],
-                                 config['oncall']['port'])
-
     iclient = IrisClient(config['iris']['host'],
                          config['iris']['port'],
                          config['iris'].get('relay_app_name', 'iris-relay'),
@@ -970,7 +974,7 @@ def get_relay_app(config=None):
     cors = CORS(config.get('allow_origins_list', []))
     app = falcon.API(middleware=[ReqBodyMiddleware(), AuthMiddleware(config), cors])
 
-    ical_relay = OncallCalendarRelay(config, oncall_client)
+    ical_relay = OncallCalendarRelay(config, config['oncall']['url'])
     app.add_route('/api/v0/ical/{ical_key}', ical_relay)
 
     gmail_config = config.get('gmail')
@@ -1011,10 +1015,10 @@ def get_relay_app(config=None):
         mobile_oncall_client = OncallMobileClient(
             app=mobile_cfg.get('relay_app_name', 'iris-relay'),
             key=mobile_cfg['oncall']['api_key'],
-            api_host=mobile_cfg['oncall']['host'])
+            api_host=mobile_cfg['oncall']['url'])
 
         iris_mobile_sink = IrisMobileSink(mobile_iris_client, mobile_cfg['host'])
-        oncall_mobile_sink = OncallMobileSink(mobile_oncall_client, mobile_cfg['oncall']['host'])
+        oncall_mobile_sink = OncallMobileSink(mobile_oncall_client, mobile_cfg['oncall']['url'])
         app.add_sink(oncall_mobile_sink, prefix='/api/v0/oncall/')
         app.add_sink(iris_mobile_sink, prefix='/api/v0/mobile/')
         app.add_route('/saml/login/{idp_name}', SPInitiated(saml))
