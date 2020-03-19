@@ -33,7 +33,7 @@ from iris_relay.gmail import Gmail
 from iris_relay.saml import SAML
 
 from irisclient import IrisClient as IrisMobileClient
-from oncallclient import OncallClient as OncallClient
+from oncallclient import OncallClient
 
 logger = getLogger(__name__)
 
