@@ -20,7 +20,6 @@ from . import db
 from streql import equals
 from twilio.twiml.voice_response import VoiceResponse
 from twilio.twiml.messaging_response import MessagingResponse
-from urllib3.connectionpool import connection_from_url
 from urllib3.exceptions import MaxRetryError
 import yaml
 import falcon
