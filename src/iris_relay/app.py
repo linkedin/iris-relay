@@ -223,7 +223,7 @@ class OncallCalendarRelay(object):
         try:
             result = self.oncall_conn.request('GET', '/api/v0/ical/' + ical_key)
         except MaxRetryError as ex:
-            logger.error(ex.reason)
+            logger.error(ex)
         else:
             if result.status == 200:
                 resp.status = falcon.HTTP_200

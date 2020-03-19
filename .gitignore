@@ -12,6 +12,7 @@ var
 /iris-relay/docker/logs
 /iris-relay/docker/var
 /src/iris_relay.egg-info
+/src/irisrelay.egg-info
 /env
 /venv
 /ops/packer/output
