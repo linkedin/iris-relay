@@ -31,7 +31,9 @@ iris:
     twilio_status: 'twilio/deliveryupdate'
     slack: 'response/slack'
 oncall:
+  relay_app_name: 'iris-relay'
   url: 'http://localhost:8080'
+  api_key: 'foo'
 iris-mobile:
   relay_app_name: 'iris-mobile'
   activated: True

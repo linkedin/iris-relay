@@ -34,7 +34,7 @@ from iris_relay.gmail import Gmail
 from iris_relay.saml import SAML
 
 from irisclient import IrisClient as IrisMobileClient
-from oncallclient import OncallClient as OncallMobileClient
+from oncallclient import OncallClient as OncallClient
 
 logger = getLogger(__name__)
 
@@ -209,9 +209,9 @@ class SPInitiated(object):
 
 
 class OncallCalendarRelay(object):
-    def __init__(self, config, oncall_base_url):
-        self.config = config
-        self.oncall_conn = connection_from_url(oncall_base_url)
+    def __init__(self, oncall_client, oncall_base_url):
+        self.oncall_client = oncall_client
+        self.base_url = oncall_base_url
 
     def on_get(self, req, resp, ical_key):
         """Access the oncall calendar identified by the key.
@@ -221,16 +221,17 @@ class OncallCalendarRelay(object):
         calendars from the internet.
         """
         try:
-            result = self.oncall_conn.request('GET', '/api/v0/ical/' + ical_key)
+            path = self.base_url + '/api/v0/ical/' + ical_key
+            result = self.oncall_client.get(path)
         except MaxRetryError as ex:
             logger.error(ex)
         else:
-            if result.status == 200:
+            if result.status_code == 200:
                 resp.status = falcon.HTTP_200
                 resp.content_type = result.headers['Content-Type']
-                resp.body = result.data
+                resp.body = result.content
                 return
-            elif 400 <= result.status <= 499:
+            elif 400 <= result.status_code <= 499:
                 resp.status = falcon.HTTP_404
                 return
 
@@ -963,6 +964,10 @@ def get_relay_app(config=None):
     if not config:
         config = read_config_from_argv()
 
+    oncall_client = OncallClient(app=config['oncall'].get('relay_app_name', 'iris-relay'),
+                                 key=config['oncall']['api_key'],
+                                 api_host=config['oncall']['url'])
+
     iclient = IrisClient(config['iris']['host'],
                          config['iris']['port'],
                          config['iris'].get('relay_app_name', 'iris-relay'),
@@ -974,7 +979,7 @@ def get_relay_app(config=None):
     cors = CORS(config.get('allow_origins_list', []))
     app = falcon.API(middleware=[ReqBodyMiddleware(), AuthMiddleware(config), cors])
 
-    ical_relay = OncallCalendarRelay(config, config['oncall']['url'])
+    ical_relay = OncallCalendarRelay(oncall_client, config['oncall']['url'])
     app.add_route('/api/v0/ical/{ical_key}', ical_relay)
 
     gmail_config = config.get('gmail')
@@ -1012,7 +1017,7 @@ def get_relay_app(config=None):
                                               api_host=mobile_cfg['host'],
                                               key=mobile_cfg['api_key'])
 
-        mobile_oncall_client = OncallMobileClient(
+        mobile_oncall_client = OncallClient(
             app=mobile_cfg.get('relay_app_name', 'iris-relay'),
             key=mobile_cfg['oncall']['api_key'],
             api_host=mobile_cfg['oncall']['url'])
