@@ -171,11 +171,10 @@ def test_twilio_message_relay_api():
 
 def test_health():
     """
-    Should respond to health check
+    Database is not set up during this should with 503
     """
     re = requests.get(host + '/healthcheck')
-    assert re.status_code == 200
-    assert re.content == b'GOOD'
+    assert re.status_code == 503
 
 
 def test_gmail_verification():
