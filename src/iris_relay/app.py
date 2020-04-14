@@ -23,6 +23,7 @@ from twilio.twiml.messaging_response import MessagingResponse
 from urllib3.exceptions import MaxRetryError
 import yaml
 import falcon
+from falcon import (HTTP_200, HTTP_503)
 import ujson
 import falcon.uri
 import os
@@ -669,9 +670,20 @@ class Healthcheck(object):
         except IOError:
             raise falcon.HTTPNotFound()
 
-        resp.status = falcon.HTTP_200
-        resp.content_type = 'text/plain'
-        resp.body = health
+        try:
+            connection = db.connect()
+            cursor = connection.cursor()
+            cursor.execute('SELECT version()')
+            cursor.close()
+            connection.close()
+        except Exception:
+            resp.status = HTTP_503
+            resp.content_type = 'text/plain'
+            resp.body = 'Could not connect to database'
+        else:
+            resp.status = HTTP_200
+            resp.content_type = 'text/plain'
+            resp.body = health
 
 
 class GmailVerification(object):
