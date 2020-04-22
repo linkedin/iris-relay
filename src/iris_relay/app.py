@@ -222,6 +222,8 @@ class OncallCalendarRelay(object):
         """
         try:
             path = self.base_url + '/api/v0/ical/' + ical_key
+            if req.query_string:
+                path += '?%s' % req.query_string
             result = self.oncall_client.get(path)
         except MaxRetryError as ex:
             logger.error(ex)
