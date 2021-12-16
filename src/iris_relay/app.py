@@ -12,6 +12,7 @@ from cryptography.fernet import Fernet
 from logging import basicConfig, getLogger
 from importlib import import_module
 import logging
+import uuid
 
 from urllib.parse import unquote_plus, urlencode, unquote
 import urllib.request as urllib2
@@ -37,8 +38,6 @@ from irisclient import IrisClient as IrisMobileClient
 from oncallclient import OncallClient
 
 logger = getLogger(__name__)
-
-uuid4hex = re.compile(r'[0-9a-f]{32}\Z', re.I)
 
 
 def process_api_response(content):
@@ -81,6 +80,14 @@ def compute_signature(token, uri, post_body, utf=False):
         computed = computed.decode('utf-8')
 
     return computed.strip()
+
+
+def is_valid_uuid(value):
+    try:
+        uuid.UUID(value)
+        return True
+    except ValueError:
+        return False
 
 
 class IDPInitiated(object):
@@ -449,14 +456,18 @@ class TwilioCallsGather(object):
         content = req.get_param('content', required=True)
         instruction = req.get_param('instruction', required=True)
         message_id = req.get_param('message_id', required=True)
+        incident_id = req.get_param('incident_id', required=True)
+        target = req.get_param('target', required=True)
         loop = req.get_param('loop')
 
-        if not message_id.isdigit() and not uuid4hex.match(message_id):
+        if not message_id.isdigit() and not is_valid_uuid(message_id):
             raise falcon.HTTPBadRequest('Bad message id',
                                         'message id must be int/hex')
 
         action = self.get_api_url(req.env, 'v0', 'twilio/calls/relay?') + urlencode({
             'message_id': message_id,
+            'incident_id': incident_id,
+            'target': target
         })
 
         r = VoiceResponse()
@@ -497,6 +508,8 @@ class TwilioCallsRelay(object):
         Accept twilio gather callbacks and forward to iris API
         """
         message_id = req.get_param('message_id')
+        incident_id = req.get_param('incident_id')
+        target = req.get_param('target')
 
         # If we weren't given a message_id, this is an OOB message and there isn't
         # anything to say, so hang up.
@@ -504,13 +517,15 @@ class TwilioCallsRelay(object):
             self.return_twixml_call('Thank you', resp)
             return
 
-        if not message_id.isdigit() and not uuid4hex.match(message_id):
+        if not message_id.isdigit() and not is_valid_uuid(message_id):
             raise falcon.HTTPBadRequest('Bad message id', 'message id must be int/hex')
 
         try:
             path = self.config['iris']['hook']['twilio_calls']
             re = self.iclient.post(path, req.context['body'].decode('utf-8'), raw=True, params={
-                'message_id': message_id
+                'message_id': message_id,
+                'incident_id': incident_id,
+                'target': target
             })
         except MaxRetryError as e:
             logger.error(e.reason)
@@ -616,7 +631,7 @@ class SlackMessagesRelay(object):
                 raise falcon.HTTPUnauthorized('Access denied',
                                               'Not a valid auth token')
             try:
-                msg_id = int(payload['callback_id'])
+                callback_id = int(payload['callback_id'])
             except KeyError as e:
                 logger.error(e)
                 logger.error('callback_id not found in the json payload.')
@@ -625,7 +640,8 @@ class SlackMessagesRelay(object):
                 logger.error(e)
                 logger.error('Callback ID not an integer: %s', payload['callback_id'])
                 raise falcon.HTTPBadRequest('Bad Request', 'Callback id must be int')
-            data = {'msg_id': msg_id,
+            data = {'msg_id': callback_id,
+                    'callback_id': callback_id,
                     'source': payload['user']['name'],
                     'content': payload['actions'][0]['name']}
             endpoint = self.config['iris']['hook']['slack']
