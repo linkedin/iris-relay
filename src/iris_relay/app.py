@@ -454,8 +454,8 @@ class TwilioCallsGather(object):
         content = req.get_param('content', required=True)
         instruction = req.get_param('instruction', required=True)
         message_id = req.get_param('message_id', required=True)
-        incident_id = req.get_param('incident_id', required=True)
-        target = req.get_param('target', required=True)
+        incident_id = req.get_param('incident_id')
+        target = req.get_param('target')
         loop = req.get_param('loop')
 
         if not message_id.isdigit() and not is_valid_uuid(message_id):
