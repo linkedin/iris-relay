@@ -30,11 +30,10 @@ import falcon.uri
 import os
 from saml2 import entity
 
-from iris_relay.client import IrisClient
 from iris_relay.gmail import Gmail
 from iris_relay.saml import SAML
 
-from irisclient import IrisClient as IrisMobileClient
+from iris_relay.client import IrisClient
 from oncallclient import OncallClient
 
 logger = getLogger(__name__)
@@ -42,9 +41,8 @@ logger = getLogger(__name__)
 
 def process_api_response(content):
     try:
-        j = ujson.loads(content)
-        if 'app_response' in j:
-            return j['app_response']
+        if 'app_response' in content:
+            return content['app_response']
     except ValueError:
         logger.exception('Failed parsing json from api')
 
@@ -308,7 +306,7 @@ class GmailRelay(object):
         ):
             raise falcon.HTTPBadRequest('Bad Request', 'Incorrect subscription')
 
-        gmail_endpoint = self.config['iris']['hook']['gmail']
+        gmail_endpoint = self.config['iris']['host'] + '/v0/' + self.config['iris']['hook']['gmail']
         data = body.get('message', {}).get('data')
 
         results = []
@@ -316,12 +314,12 @@ class GmailRelay(object):
         for msg_id_gmail, headers, body in self.gmail.list_unread_message():
             data = ujson.dumps({'body': body, 'headers': headers})
             try:
-                result = self.iclient.post(gmail_endpoint, data, raw=True)
+                result = self.iclient.post(gmail_endpoint, data=data)
             except MaxRetryError as ex:
                 logger.error(ex.reason)
             else:
                 # If status from Iris API == 204 or 400, mark message as read
-                if result.status == 204 or result.status == 400:
+                if result.status_code == 204 or result.status_code == 400:
                     logger.info('Will mark gmail message %s as read', msg_id_gmail)
                     mark_read_mids.add(msg_id_gmail)
                 results.append(result)
@@ -333,10 +331,10 @@ class GmailRelay(object):
             logger.warning('Got no message change history from Gmail: %s, %s',
                            user_id, history_id)
         # TODO(khrichar): need to be resilient to unauthorized message id's
-        if all(r.status == 204 for r in results):
+        if all(r.status_code == 204 for r in results):
             resp.status = falcon.HTTP_204
             return
-        elif any(r.status == 400 for r in results):
+        elif any(r.status_code == 400 for r in results):
             # TODO(khrichar): reply with error to gmail sender
             raise falcon.HTTPBadRequest('Bad Request', '')
         else:
@@ -364,18 +362,18 @@ class GmailOneClickRelay(object):
         if not self.validate_token(token, data):
             raise falcon.HTTPForbidden('Invalid token for these given values', '')
 
-        endpoint = self.config['iris']['hook']['gmail_one_click']
+        endpoint = self.config['iris']['host'] + '/v0/' + self.config['iris']['hook']['gmail_one_click']
 
         try:
             result = self.iclient.post(endpoint, data)
         except MaxRetryError:
             logger.exception('Hitting iris-api failed for gmail oneclick')
         else:
-            if result.status == 204:
+            if result.status_code == 204:
                 resp.status = falcon.HTTP_204
                 return
             else:
-                logger.error('Unexpected status code from api %s for gmail oneclick', result.status)
+                logger.error('Unexpected status code from api %s for gmail oneclick', result.status_code)
 
         raise falcon.HTTPInternalServerError('Internal Server Error', 'Invalid response from API')
 
@@ -521,8 +519,8 @@ class TwilioCallsRelay(object):
             raise falcon.HTTPBadRequest('Bad message id', 'message id must be int/hex')
 
         try:
-            path = self.config['iris']['hook']['twilio_calls']
-            re = self.iclient.post(path, req.context['body'].decode('utf-8'), raw=True, params={
+            path = self.config['iris']['host'] + '/v0/' + self.config['iris']['hook']['twilio_calls']
+            re = self.iclient.post(path, data=req.context['body'].decode('utf-8'), params={
                 'message_id': message_id,
                 'incident_id': incident_id,
                 'target': target
@@ -532,13 +530,13 @@ class TwilioCallsRelay(object):
             self.return_twixml_call('Connection error to web hook.', resp)
             return
 
-        if re.status != 200:
+        if re.status_code != 200:
             self.return_twixml_call(
-                'Got status code: %d, content: %s' % (re.status,
-                                                      re.data[0:100]), resp)
+                'Got status code: %d, content: %s' % (re.status_code,
+                                                      re.text[0:100]), resp)
             return
         else:
-            body = process_api_response(re.data)
+            body = process_api_response(re.json())
             self.return_twixml_call(body, resp)
             return
 
@@ -561,20 +559,20 @@ class TwilioMessagesRelay(object):
         Accept twilio SMS webhook and forward to iris API
         """
         try:
-            path = self.config['iris']['hook']['twilio_messages']
-            re = self.iclient.post(path, req.context['body'].decode('utf-8'), raw=True)
+            path = self.config['iris']['host'] + '/v0/' + self.config['iris']['hook']['twilio_messages']
+            re = self.iclient.post(path, data=req.context['body'].decode('utf-8'))
         except MaxRetryError as e:
             logger.error(e.reason)
             self.return_twixml_message('Connection error to web hook.', resp)
             return
 
-        if re.status != 200:
+        if re.status_code != 200:
             self.return_twixml_message(
-                'Got status code: %d, content: %s' % (re.status,
-                                                      re.data[0:100]), resp)
+                'Got status code: %d, content: %s' % (re.status_code,
+                                                      re.text[0:100]), resp)
             return
         else:
-            body = process_api_response(re.data)
+            body = process_api_response(re.json())
             self.return_twixml_message(body, resp)
             return
 
@@ -582,7 +580,7 @@ class TwilioMessagesRelay(object):
 class TwilioDeliveryStatus(object):
     def __init__(self, config, iclient):
         self.iclient = iclient
-        self.endpoint = config['iris']['hook']['twilio_status']
+        self.endpoint = config['iris']['host'] + '/v0/' + config['iris']['hook']['twilio_status']
 
     def on_post(self, req, resp):
         """
@@ -591,13 +589,13 @@ class TwilioDeliveryStatus(object):
         """
 
         try:
-            re = self.iclient.post(self.endpoint, req.context['body'].decode('utf-8'), raw=True)
+            re = self.iclient.post(self.endpoint, data=req.context['body'].decode('utf-8'))
         except MaxRetryError:
             logger.exception('Failed posting data to iris-api')
             raise falcon.HTTPInternalServerError('Internal Server Error', 'API call failed')
 
-        if re.status != 204:
-            logger.error('Invalid response from API for delivery status update: %s', re.status)
+        if re.status_code != 204:
+            logger.error('Invalid response from API for delivery status update: %s', re.status_code)
             raise falcon.HTTPBadRequest('Likely bad params passed', 'Invalid response from API')
 
         resp.status = falcon.HTTP_204
@@ -644,18 +642,18 @@ class SlackMessagesRelay(object):
                     'callback_id': callback_id,
                     'source': payload['user']['name'],
                     'content': payload['actions'][0]['name']}
-            endpoint = self.config['iris']['hook']['slack']
+            endpoint = self.config['iris']['host'] + '/v0/' + self.config['iris']['hook']['slack']
             try:
-                result = self.iclient.post(endpoint, data)
+                result = self.iclient.post(endpoint, ujson.dumps(data))
             except MaxRetryError as e:
                 logger.error(e.reason)
                 return
-            if result.status == 400:
+            if result.status_code == 400:
                 raise falcon.HTTPBadRequest('Bad Request', '')
-            elif result.status != 200:
+            elif result.status_code != 200:
                 raise falcon.HTTPInternalServerError('Internal Server Error', 'Unknown response from the api')
             else:
-                content = process_api_response(result.data)
+                content = process_api_response(result.json())
                 self.return_slack_message(resp, content)
             return
         except Exception:
@@ -997,10 +995,10 @@ def get_relay_app(config=None):
                                  key=config['oncall']['api_key'],
                                  api_host=config['oncall']['url'])
 
-    iclient = IrisClient(config['iris']['host'],
-                         config['iris']['port'],
-                         config['iris'].get('relay_app_name', 'iris-relay'),
-                         config['iris']['api_key'])
+    iclient = IrisClient(app=config['iris'].get('relay_app_name', 'iris-relay'),
+                                              api_host=config['iris']['host'],
+                                              key=config['iris']['api_key'])
+
     saml = SAML(config.get('saml'))
 
     # Note that ReqBodyMiddleware must be run before AuthMiddleware, since
@@ -1042,7 +1040,7 @@ def get_relay_app(config=None):
     mobile_cfg = config.get('iris-mobile', {})
     if mobile_cfg.get('activated'):
         db.init(config['db'])
-        mobile_iris_client = IrisMobileClient(app=mobile_cfg.get('relay_app_name', 'iris-relay'),
+        mobile_iris_client = IrisClient(app=mobile_cfg.get('relay_app_name', 'iris-relay'),
                                               api_host=mobile_cfg['host'],
                                               key=mobile_cfg['api_key'])
 
