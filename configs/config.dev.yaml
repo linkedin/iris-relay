@@ -20,8 +20,7 @@ slack:
   response_text: 'Alert claimed.'
 iris:
   relay_app_name: 'iris-relay'
-  host: localhost
-  port: 16649
+  host: 'http://localhost:16649'
   api_key: 'foo'
   hook:
     gmail: 'response/gmail'

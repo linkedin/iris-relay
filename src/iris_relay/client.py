@@ -1,69 +1,40 @@
-# Copyright (c) LinkedIn Corporation. All rights reserved. Licensed under the BSD-2 Clause license.
-# See LICENSE in the project root for license information.
+from __future__ import absolute_import
 
-
-import simplejson as json
-import time
-import hmac
-import hashlib
 import base64
-# py 2 and 3 compatibility
-try:
-    from urllib import urlencode
-except ImportError:
-    from urllib.parse import urlencode
-from urllib3.connectionpool import HTTPConnectionPool
+import hashlib
+import hmac
+import time
 
+import requests
 
-class IrisClient(HTTPConnectionPool):
-    def __init__(self, host, port, user, api_key, version=0, **kwargs):
-        super().__init__(host, port, **kwargs)
-        self.version = version
-        self.user = user
-        self.HMAC = hmac.new(api_key.encode('utf8'), b'', hashlib.sha512)
-        self.base_path = '/v%s/' % version if version is not None else '/'
+class IrisAuth(requests.auth.AuthBase):
+    def __init__(self, app, key):
+        if not isinstance(app, bytes):
+            app = app.encode('utf-8')
+        self.header = b'hmac ' + app + b':'
+        if not isinstance(key, bytes):
+            key = key.encode('utf-8')
+        self.HMAC = hmac.new(key, b'', hashlib.sha512)
 
-    def post(self, endpoint, data, params=None, raw=False, headers=None):
+    def __call__(self, request):
         HMAC = self.HMAC.copy()
-        path = self.base_path + endpoint
-        method = 'POST'
-        hdrs = {}
-        window = int(time.time()) // 5
-        if not raw:
-            hdrs = {'Content-Type': 'application/json'}
-            body = json.dumps(data)
-        else:
-            hdrs = headers if headers else {}
-            body = data
 
-        if params:
-            path = ''.join([path, '?', urlencode(params)])
+        path = request.path_url
+        method = request.method
+        body = request.body or ''
+        window = str(int(time.time()) // 30)
         text = '%s %s %s %s' % (window, method, path, body)
-        text = text.encode('utf8')
+        text = text.encode('utf-8')
         HMAC.update(text)
+
         digest = base64.urlsafe_b64encode(HMAC.digest())
+        request.headers['Authorization'] = self.header + digest
+        return request
 
-        auth_header = 'hmac %s:' % self.user
-        hdrs['Authorization'] = auth_header.encode('utf8') + digest
 
-        return self.urlopen(method, path, headers=hdrs, body=body)
-
-    def get(self, endpoint, params=None, raw=False):
-        HMAC = self.HMAC.copy()
-        path = self.base_path + endpoint
-        method = 'GET'
-        window = int(time.time()) // 5
-        body = ''
-        if params:
-            path = ''.join([path, '?', urlencode(params)])
-        text = '%s %s %s %s' % (window, method, path, body)
-        text = text.encode('utf8')
-        HMAC.update(text)
-        digest = base64.urlsafe_b64encode(HMAC.digest())
-
-        auth_header = 'hmac %s:' % self.user
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': auth_header.encode('utf8') + digest
-        }
-        return self.urlopen(method, path, headers=headers)
+class IrisClient(requests.Session):
+    def __init__(self, app, key, api_host, version=0):
+        super(IrisClient, self).__init__()
+        self.app = app
+        self.auth = IrisAuth(app, key)
+        self.url = api_host + '/v%d/' % version
