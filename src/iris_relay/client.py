@@ -7,6 +7,7 @@ import time
 
 import requests
 
+
 class IrisAuth(requests.auth.AuthBase):
     def __init__(self, app, key):
         if not isinstance(app, bytes):
