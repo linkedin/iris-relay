@@ -22,6 +22,7 @@ from streql import equals
 from twilio.twiml.voice_response import VoiceResponse
 from twilio.twiml.messaging_response import MessagingResponse
 from urllib3.exceptions import MaxRetryError
+from requests.exceptions import ConnectionError
 import yaml
 import falcon
 from falcon import (HTTP_200, HTTP_503)
@@ -230,8 +231,8 @@ class OncallCalendarRelay(object):
             if req.query_string:
                 path += '?%s' % req.query_string
             result = self.oncall_client.get(path)
-        except MaxRetryError as ex:
-            logger.error(ex)
+        except (MaxRetryError, ConnectionError):
+            logger.exception('request failed with exception')
         else:
             if result.status_code == 200:
                 resp.status = falcon.HTTP_200
@@ -315,8 +316,8 @@ class GmailRelay(object):
             data = ujson.dumps({'body': body, 'headers': headers})
             try:
                 result = self.iclient.post(gmail_endpoint, data=data)
-            except MaxRetryError as ex:
-                logger.error(ex.reason)
+            except (MaxRetryError, ConnectionError):
+                logger.exception('request failed with exception')
             else:
                 # If status from Iris API == 204 or 400, mark message as read
                 if result.status_code == 204 or result.status_code == 400:
@@ -366,7 +367,7 @@ class GmailOneClickRelay(object):
 
         try:
             result = self.iclient.post(endpoint, data)
-        except MaxRetryError:
+        except (MaxRetryError, ConnectionError):
             logger.exception('Hitting iris-api failed for gmail oneclick')
         else:
             if result.status_code == 204:
@@ -525,8 +526,8 @@ class TwilioCallsRelay(object):
                 'incident_id': incident_id,
                 'target': target
             })
-        except MaxRetryError as e:
-            logger.error(e.reason)
+        except (MaxRetryError, ConnectionError):
+            logger.exception('request failed with exception')
             self.return_twixml_call('Connection error to web hook.', resp)
             return
 
@@ -561,8 +562,8 @@ class TwilioMessagesRelay(object):
         try:
             path = self.config['iris']['host'] + '/v0/' + self.config['iris']['hook']['twilio_messages']
             re = self.iclient.post(path, data=req.context['body'].decode('utf-8'))
-        except MaxRetryError as e:
-            logger.error(e.reason)
+        except (MaxRetryError, ConnectionError):
+            logger.exception('request failed with exception')
             self.return_twixml_message('Connection error to web hook.', resp)
             return
 
@@ -590,7 +591,7 @@ class TwilioDeliveryStatus(object):
 
         try:
             re = self.iclient.post(self.endpoint, data=req.context['body'].decode('utf-8'))
-        except MaxRetryError:
+        except (MaxRetryError, ConnectionError):
             logger.exception('Failed posting data to iris-api')
             raise falcon.HTTPInternalServerError('Internal Server Error', 'API call failed')
 
@@ -645,8 +646,8 @@ class SlackMessagesRelay(object):
             endpoint = self.config['iris']['host'] + '/v0/' + self.config['iris']['hook']['slack']
             try:
                 result = self.iclient.post(endpoint, ujson.dumps(data))
-            except MaxRetryError as e:
-                logger.error(e.reason)
+            except (MaxRetryError, ConnectionError):
+                logger.exception('request failed with exception')
                 return
             if result.status_code == 400:
                 raise falcon.HTTPBadRequest('Bad Request', '')
@@ -734,8 +735,8 @@ class IrisMobileSink(object):
                 return
             else:
                 raise falcon.HTTPMethodNotAllowed(['GET', 'POST', 'PUT', 'DELETE'])
-        except MaxRetryError as e:
-            logger.error(e.reason)
+        except (MaxRetryError, ConnectionError):
+            logger.exception('request failed with exception')
             raise falcon.HTTPInternalServerError('Internal Server Error', 'Max retry error, api unavailable')
         if result.status_code == 400:
             raise falcon.HTTPBadRequest('Bad Request', '')
@@ -764,8 +765,8 @@ class OncallMobileSink(object):
                 return
             else:
                 raise falcon.HTTPMethodNotAllowed(['GET', 'OPTIONS'])
-        except MaxRetryError as e:
-            logger.error(e.reason)
+        except (MaxRetryError, ConnectionError):
+            logger.exception('request failed with exception')
             raise falcon.HTTPInternalServerError('Internal Server Error', 'Max retry error, api unavailable')
         if result.status_code == 400:
             raise falcon.HTTPBadRequest('Bad Request', '')
