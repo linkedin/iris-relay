@@ -725,10 +725,7 @@ class IrisMobileSink(object):
             path += '?%s' % req.query_string
         try:
             if req.method == 'POST':
-                body = b''
-                if req.context['body']:
-                    body = req.context['body']
-                result = self.iris_client.post(path, body)
+                result = self.iris_client.post(path, data=req.context['body'].decode('utf-8'))
             elif req.method == 'GET':
                 result = self.iris_client.get(path)
             elif req.method == 'OPTIONS':
