@@ -1,12 +1,13 @@
 # Copyright (c) LinkedIn Corporation. All rights reserved. Licensed under the BSD-2 Clause license.
 # See LICENSE in the project root for license information.
 
-
+from gevent import monkey
+monkey.patch_all()  # NOQA
 import hmac
 import time
 import hashlib
 import re
-from base64 import b64encode, decodestring, urlsafe_b64encode
+from base64 import b64encode, decodebytes, urlsafe_b64encode
 from hashlib import sha1, sha512
 from cryptography.fernet import Fernet
 from logging import basicConfig, getLogger
@@ -831,7 +832,7 @@ class AuthMiddleware(object):
                 raise falcon.HTTPUnauthorized('Access denied', 'No auth header', [])
 
             auth = re.sub('^Basic ', '', hdr_auth)
-            usr, pwd = decodestring(auth).split(':')
+            usr, pwd = decodebytes(auth).split(':')
             if not equals(self.basic_auth.get(usr, ''), pwd):
                 logger.warning('basic auth failure: %s', usr)
                 raise falcon.HTTPUnauthorized('Access denied', 'Basic auth failure', [])

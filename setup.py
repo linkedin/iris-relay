@@ -31,7 +31,7 @@ setuptools.setup(
     install_requires=[
         'pysaml2==4.5.0',
         'PyYAML',
-        'gevent==1.4.0',
+        'gevent==21.12.0',
         'requests==2.23.0',
         'requests-futures==0.9.9',
         'google-api-python-client==1.6.2',
@@ -43,7 +43,7 @@ setuptools.setup(
         'streql==3.0.2',
         'twilio==6.25.0',
         'urllib3==1.25.11',
-        'falcon==1.1.0',
+        'falcon==1.4.1',
         'ujson==1.35',
         'irisclient==1.3.0',
         'oncallclient==1.1.0',
