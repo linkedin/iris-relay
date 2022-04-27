@@ -7,6 +7,6 @@ sphinxcontrib-httpdomain
 SQLAlchemy
 PyMySQL
 pysaml2
-pyOpenSSL==18.0.0
+pyOpenSSL==22.0.0
 irisclient
 oncallclient
