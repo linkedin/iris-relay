@@ -784,7 +784,8 @@ class RegisterDevice(object):
     def on_post(self, req, resp):
         data = ujson.loads(req.context['body'].decode('utf-8'))
         data['username'] = req.context['user']
-        result = self.iris.post('devices', data)
+        path = self.config['iris']['host'] + '/v0/devices'
+        result = self.iris.post(path, data)
         if result.status == 400:
             raise falcon.HTTPBadRequest('Bad Request', '')
         elif result.status != 201:
