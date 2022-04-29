@@ -778,18 +778,19 @@ class OncallMobileSink(object):
 
 class RegisterDevice(object):
 
-    def __init__(self, iris_client):
+    def __init__(self, iris_client, base_url):
         self.iris = iris_client
+        self.base_url = base_url
 
     def on_post(self, req, resp):
         data = ujson.loads(req.context['body'].decode('utf-8'))
         data['username'] = req.context['user']
-        path = self.config['iris']['host'] + '/v0/devices'
-        result = self.iris.post(path, data)
-        if result.status == 400:
+        path = self.base_url + '/v0/devices'
+        result = self.iris.post(path, ujson.dumps(data))
+        if result.status_code == 400:
             raise falcon.HTTPBadRequest('Bad Request', '')
-        elif result.status != 201:
-            logger.error('Unknown response from API: %s: %s', result.status, result.data)
+        elif result.status_code != 201:
+            logger.error('Unknown response from API: %s: %s', result.status_code, result.content)
             raise falcon.HTTPInternalServerError('Internal Server Error', 'Unknown response from the api')
         resp.status = falcon.HTTP_201
 
@@ -1056,7 +1057,7 @@ def get_relay_app(config=None):
         app.add_route('/saml/login/{idp_name}', SPInitiated(saml))
         app.add_route('/saml/sso/{idp_name}', IDPInitiated(mobile_cfg.get('auth'), saml))
         app.add_route('/api/v0/mobile/refresh', TokenRefresh(mobile_cfg.get('auth')))
-        app.add_route('/api/v0/mobile/device', RegisterDevice(iclient))
+        app.add_route('/api/v0/mobile/device', RegisterDevice(iclient, mobile_cfg['host']))
 
     for hook in config.get('post_init_hook', []):
         try:
