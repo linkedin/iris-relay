@@ -44,7 +44,7 @@ setuptools.setup(
         'twilio==6.25.0',
         'urllib3==1.25.11',
         'falcon==1.4.1',
-        'ujson==1.35',
+        'ujson==5.2.0',
         'irisclient==1.3.0',
         'oncallclient==1.1.0',
     ],
