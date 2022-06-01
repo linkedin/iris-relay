@@ -800,6 +800,7 @@ class AuthMiddleware(object):
     def __init__(self, config):
         self.config = config
         self.basic_auth = config['server']['basic_auth']
+        self.auth_postprocessing_list = config['auth_postprocessing_list']
 
         mobile_cfg = config.get('iris-mobile', {})
         self.mobile = mobile_cfg.get('activated', False)
@@ -840,6 +841,8 @@ class AuthMiddleware(object):
                 raise falcon.HTTPUnauthorized('Access denied', 'Basic auth failure', [])
 
         segments = req.path.strip('/').split('/')
+        if segments[2] in self.auth_postprocessing_list:
+            return
         if segments[0] == 'api':
             if len(segments) >= 3:
                 # twilio validation

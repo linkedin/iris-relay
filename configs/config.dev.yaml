@@ -12,6 +12,8 @@ allow_origins_list:
  - http://localhost:35729
  - http://localhost
  - http://localhost/
+auth_postprocessing_list:
+ - actions_tracking.gif
 twilio:
   remote_host: 'localhost:11648'
   auth_token: 'foobar'
