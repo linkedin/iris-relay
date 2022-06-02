@@ -12,8 +12,8 @@ allow_origins_list:
  - http://localhost:35729
  - http://localhost
  - http://localhost/
-auth_postprocessing_list:
- - dummy_item1
+special_auth_endpoint_list:
+ #- special_auth_endpoint_1
 twilio:
   remote_host: 'localhost:11648'
   auth_token: 'foobar'

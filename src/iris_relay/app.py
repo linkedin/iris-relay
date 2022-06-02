@@ -800,7 +800,7 @@ class AuthMiddleware(object):
     def __init__(self, config):
         self.config = config
         self.basic_auth = config['server']['basic_auth']
-        self.auth_postprocessing_list = config['auth_postprocessing_list']
+        self.special_auth_endpoint_list = config['special_auth_endpoint_list']
 
         mobile_cfg = config.get('iris-mobile', {})
         self.mobile = mobile_cfg.get('activated', False)
@@ -844,9 +844,8 @@ class AuthMiddleware(object):
         if segments[0] == 'api':
             if len(segments) >= 3:
                 # the auth_postprocessing_list is for auths which should be handled separately by the function handling the corresponding endpoint
-                for item in self.auth_postprocessing_list:
-                    if segments[2].startswith(item):
-                        return
+                if self.special_auth_endpoint_list and segments[2] in self.special_auth_endpoint_list:
+                    return
                 # twilio validation
                 if segments[2] == 'twilio':
                     sig = req.get_header('X_TWILIO_SIGNATURE')
