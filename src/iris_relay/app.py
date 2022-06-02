@@ -841,10 +841,12 @@ class AuthMiddleware(object):
                 raise falcon.HTTPUnauthorized('Access denied', 'Basic auth failure', [])
 
         segments = req.path.strip('/').split('/')
-        if segments[2] in self.auth_postprocessing_list:
-            return
         if segments[0] == 'api':
             if len(segments) >= 3:
+                # the auth_postprocessing_list is for auths which should be handled separately by the function handling the corresponding endpoint
+                for item in self.auth_postprocessing_list:
+                    if segments[2].startswith(item):
+                        return
                 # twilio validation
                 if segments[2] == 'twilio':
                     sig = req.get_header('X_TWILIO_SIGNATURE')
