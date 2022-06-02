@@ -847,7 +847,6 @@ class AuthMiddleware(object):
                 for item in self.auth_postprocessing_list:
                     if segments[2].startswith(item):
                         return
-                
                 # twilio validation
                 if segments[2] == 'twilio':
                     sig = req.get_header('X_TWILIO_SIGNATURE')
