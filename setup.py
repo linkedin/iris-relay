@@ -40,7 +40,6 @@ setuptools.setup(
         'oauth2client',
         'simplejson',
         'slackclient==0.16',
-        'streql==3.0.2',
         'twilio==6.25.0',
         'urllib3==1.26.13',
         'falcon==3.1.1',
