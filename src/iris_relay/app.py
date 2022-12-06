@@ -851,7 +851,8 @@ class AuthMiddleware(object):
                     if sig is None:
                         logger.warning("no twilio signature found!")
                         raise falcon.HTTPUnauthorized('Access denied', 'No Twilio signature', [])
-                    uri = [req.protocol, '://',
+                    protocol = (req.scheme if req.scheme else 'https')
+                    uri = [protocol, '://',
                            req.get_header('HOST'),
                            self.config['server'].get('lb_routing_path', ''),
                            req.path]
