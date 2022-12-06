@@ -835,7 +835,7 @@ class AuthMiddleware(object):
 
             auth = re.sub('^Basic ', '', hdr_auth)
             usr, pwd = decodebytes(auth).split(':')
-            if not equals(self.basic_auth.get(usr, ''), pwd):
+            if not self.basic_auth.get(usr, '') == pwd:
                 logger.warning('basic auth failure: %s', usr)
                 raise falcon.HTTPUnauthorized('Access denied', 'Basic auth failure', [])
 
