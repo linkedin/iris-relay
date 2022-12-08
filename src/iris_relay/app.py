@@ -19,7 +19,6 @@ from urllib.parse import unquote_plus, urlencode, unquote
 import urllib.request as urllib2
 
 from . import db
-from streql import equals
 from twilio.twiml.voice_response import VoiceResponse
 from twilio.twiml.messaging_response import MessagingResponse
 from urllib3.exceptions import MaxRetryError
@@ -610,7 +609,7 @@ class SlackMessagesRelay(object):
         self.verification_token = self.config['slack']['verification_token']
 
     def valid_token(self, token):
-        return equals(self.verification_token, token)
+        return self.verification_token == token
 
     def return_slack_message(self, resp, text):
         resp.status = falcon.HTTP_200
@@ -836,7 +835,7 @@ class AuthMiddleware(object):
 
             auth = re.sub('^Basic ', '', hdr_auth)
             usr, pwd = decodebytes(auth).split(':')
-            if not equals(self.basic_auth.get(usr, ''), pwd):
+            if not self.basic_auth.get(usr, '') == pwd:
                 logger.warning('basic auth failure: %s', usr)
                 raise falcon.HTTPUnauthorized('Access denied', 'Basic auth failure', [])
 
@@ -852,7 +851,8 @@ class AuthMiddleware(object):
                     if sig is None:
                         logger.warning("no twilio signature found!")
                         raise falcon.HTTPUnauthorized('Access denied', 'No Twilio signature', [])
-                    uri = [req.protocol, '://',
+                    protocol = (req.scheme if req.scheme else 'https')
+                    uri = [protocol, '://',
                            req.get_header('HOST'),
                            self.config['server'].get('lb_routing_path', ''),
                            req.path]
@@ -937,11 +937,11 @@ class ReqBodyMiddleware(object):
     we often need the post body twice (once for Twilio signature validation and once to relay the message onto Iris
     API. To avoid this problem, we read the post body into the request context and access it from there.
 
-    IMPORTANT NOTE: Because we use stream.read() here, all other uses of this method will return '', not the post body.
+    IMPORTANT NOTE: Because we use bounded_stream.read() here, all other uses of this method will return '', not the post body.
     '''
 
     def process_request(self, req, resp):
-        req.context['body'] = req.stream.read()
+        req.context['body'] = req.bounded_stream.read()
 
 
 class CORS(object):
@@ -1009,7 +1009,8 @@ def get_relay_app(config=None):
     # Note that ReqBodyMiddleware must be run before AuthMiddleware, since
     # authentication uses the post body
     cors = CORS(config.get('allow_origins_list', []))
-    app = falcon.API(middleware=[ReqBodyMiddleware(), AuthMiddleware(config), cors])
+    app = falcon.App(middleware=[ReqBodyMiddleware(), AuthMiddleware(config), cors])
+    app.req_options.strip_url_path_trailing_slash = True
 
     ical_relay = OncallCalendarRelay(oncall_client, config['oncall']['url'])
     app.add_route('/api/v0/ical/{ical_key}', ical_relay)

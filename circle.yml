@@ -2,7 +2,7 @@ machine:
   services:
     - docker
   python:
-      version: 2.7.11
+      version: 3.10.8
 
 dependencies:
   override:
