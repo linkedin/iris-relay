@@ -17,6 +17,7 @@ class SAML(object):
         self.metadata = config.get('metadata', {})
         self.acs_format = config['acs_format']
         self.https_acs_format = config['https_acs_format']
+        self.entity_id = config.get('entity_id', '')
 
     def saml_client_for(self, idp_name=None):
         '''
@@ -36,6 +37,7 @@ class SAML(object):
             metadata = self.metadata[idp_name]
 
         settings = {
+            'entityid': self.entity_id,
             'metadata': {
                 'inline': [metadata],
             },

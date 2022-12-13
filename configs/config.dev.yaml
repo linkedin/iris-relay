@@ -86,3 +86,4 @@ saml:
     idp: 'https://www.metadata.com'
   acs_format: 'http://host:16648/saml/sso/%s'
   https_acs_format: 'https://host/saml/sso/%s'
+  entity_id: "http://host/idp"
