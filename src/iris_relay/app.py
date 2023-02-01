@@ -1008,8 +1008,12 @@ def get_relay_app(config=None):
 
     # Note that ReqBodyMiddleware must be run before AuthMiddleware, since
     # authentication uses the post body
-    cors = CORS(config.get('allow_origins_list', []))
-    app = falcon.App(middleware=[ReqBodyMiddleware(), AuthMiddleware(config), cors])
+    app = None
+    if config.get('permissive_cors'):
+        app = falcon.App(cors_enable=True, middleware=[ReqBodyMiddleware(), AuthMiddleware(config)])
+    else:
+        cors = CORS(config.get('allow_origins_list', []))
+        app = falcon.App(middleware=[ReqBodyMiddleware(), AuthMiddleware(config), cors])
     app.req_options.strip_url_path_trailing_slash = True
 
     ical_relay = OncallCalendarRelay(oncall_client, config['oncall']['url'])
