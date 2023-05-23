@@ -32,7 +32,7 @@ setuptools.setup(
         'pysaml2==4.5.0',
         'PyYAML',
         'gevent==21.12.0',
-        'requests==2.28.1',
+        'requests==2.31.0',
         'requests-futures==0.9.9',
         'google-api-python-client==1.6.2',
         'SQLAlchemy==1.3.0',
