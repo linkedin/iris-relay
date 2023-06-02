@@ -46,7 +46,7 @@ setuptools.setup(
         'ujson==5.5.0',
         'irisclient==1.3.0',
         'oncallclient==1.1.0',
-        'cryptography==38.0.4'
+        'cryptography==41.0.0'
     ],
     entry_points={
         'console_scripts': [
