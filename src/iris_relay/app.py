@@ -1,8 +1,15 @@
 # Copyright (c) LinkedIn Corporation. All rights reserved. Licensed under the BSD-2 Clause license.
 # See LICENSE in the project root for license information.
 
-from gevent import monkey
-monkey.patch_all()  # NOQA
+import os
+no_gevent = os.getenv('NO_GEVENT')  # NOQA
+if no_gevent is not None and no_gevent.lower() in ['true', '1', 'yes']:  # NOQA
+    del os # NOQA
+    from gevent import monkey
+    monkey.patch_all()  # NOQA
+    import os  # NOQA
+else:
+    print("skipped gevent monkey patching")
 import hmac
 import time
 import hashlib
@@ -28,7 +35,6 @@ import falcon
 from falcon import (HTTP_200, HTTP_503)
 import ujson
 import falcon.uri
-import os
 from saml2 import entity
 
 from iris_relay.gmail import Gmail
