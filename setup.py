@@ -28,25 +28,25 @@ setuptools.setup(
     package_dir={'': 'src'},
     packages=setuptools.find_packages('src'),
     include_package_data=True,
-    install_requires=[
-        'pysaml2==4.5.0',
-        'PyYAML==6.0',
-        'gevent==21.12.0',
-        'requests==2.28.1',
-        'requests-futures==0.9.9',
-        'google-api-python-client==1.6.2',
-        'SQLAlchemy==1.3.0',
-        'PyMySQL==0.7.11',
-        'oauth2client',
-        'simplejson',
+        install_requires=[
+        'pysaml2==7.4.2',
+        'PyYAML==6.0.1',
+        'gevent==23.9.1',
+        'requests==2.32.3',
+        'requests-futures==1.0.0',
+        'google-api-python-client==2.150.0',
+        'SQLAlchemy==1.4.36',
+        'PyMySQL==0.10.1',
+        'oauth2client==4.1.3',
+        'simplejson==3.20.1',
         'slackclient==0.16',
-        'twilio==6.25.0',
+        'twilio==6.44.1',
         'urllib3==1.26.13',
         'falcon==3.1.1',
         'ujson==5.5.0',
         'irisclient==1.3.0',
         'oncallclient==1.1.0',
-        'cryptography==38.0.4'
+        'cryptography>=41.0.5,<45'
     ],
     entry_points={
         'console_scripts': [
