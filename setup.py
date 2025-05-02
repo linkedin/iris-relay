@@ -30,7 +30,7 @@ setuptools.setup(
     include_package_data=True,
     install_requires=[
         'pysaml2==4.5.0',
-        'PyYAML',
+        'PyYAML==6.0',
         'gevent==21.12.0',
         'requests==2.28.1',
         'requests-futures==0.9.9',

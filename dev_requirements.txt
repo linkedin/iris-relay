@@ -10,3 +10,4 @@ pysaml2
 pyOpenSSL==22.0.0
 irisclient
 oncallclient
+PyYAML==6.0
