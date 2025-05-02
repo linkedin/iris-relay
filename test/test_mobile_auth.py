@@ -1,7 +1,5 @@
 import base64
-import time
 import ujson
-import hashlib
 import uuid
 import pytest
 from unittest.mock import Mock, patch, MagicMock
