@@ -321,8 +321,9 @@ class SPInitiated(object):
             - HTTP 429 if too many active login sessions are in flight.
         """
 
+        relayState = req.get_param('RelayState', default=None)
         saml_client = self.saml_manager.saml_client_for(idp_name)
-        reqid, info = saml_client.prepare_for_authenticate()
+        reqid, info = saml_client.prepare_for_authenticate(relay_state=relayState)
         connection = db.connect()
         cursor = connection.cursor()
         try:
