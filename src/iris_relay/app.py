@@ -393,7 +393,7 @@ class SAMLInitiate(object):
 
     def on_post(self, req, resp):
         """
-        Endpoint: POST /api/v0/saml/initiate
+        Endpoint: POST /saml/initiate
 
         Initiates a SAML login session by accepting a client-generated encryption key and a device identifier.
         Stores this data in the `saml_login_session` table along with a generated session ID and creation timestamp.
