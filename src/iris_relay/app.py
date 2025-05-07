@@ -30,6 +30,7 @@ import ujson
 import falcon.uri
 import os
 from saml2 import entity
+import base64
 
 from iris_relay.gmail import Gmail
 from iris_relay.saml import SAML
@@ -38,6 +39,9 @@ from iris_relay.client import IrisClient
 from oncallclient import OncallClient
 
 logger = getLogger(__name__)
+
+MAX_SAML_SESSION_TTL = 900  # 15 minutes
+MAX_LOGIN_SESSIONS = 20000
 
 
 def process_api_response(content):
@@ -90,15 +94,47 @@ def is_valid_uuid(value):
 
 
 class IDPInitiated(object):
-    def __init__(self, config, saml_manager):
+    def __init__(self, config, saml_manager, saml_encryption=False):
         self.saml_manager = saml_manager
         self.access_ttl = config['access_ttl']
         self.refresh_ttl = config['refresh_ttl']
         self.redirect_url = config['redirect_url']
         self.username_attr = config.get('username_attr')
-        self.fernet = Fernet(config['encrypt_key'])
+        key = config['encrypt_key']
+        try:
+            self.fernet = Fernet(key.encode("utf-8") if isinstance(key, str) else key)
+        except Exception as e:
+            raise ValueError("Invalid Fernet key provided") from e
+        self.saml_encryption = saml_encryption
 
     def on_post(self, req, resp, idp_name):
+        """
+        Handle POST requests from the IdP containing a SAMLResponse and optional RelayState.
+
+        This endpoint completes the SAML login process by validating the SAMLResponse,
+        issuing a refresh token, and redirecting the user back to the mobile app.
+
+        If RelayState is a base64-encoded JSON object containing a saml_session_id, the handler
+        will attempt to fetch corresponding session data (client_key, device_id) from the
+        saml_login_session table. If found, the refresh token payload is encrypted using the
+        client-provided key and returned as a deep link to the app.
+
+        If no session is found and encryption is required, the request is rejected with 401.
+        If encryption is optional, the response falls back to legacy behavior: appending
+        token details to the URL fragment.
+
+        Parameters:
+            req (falcon.Request): The incoming HTTP request, containing SAMLResponse and RelayState.
+            resp (falcon.Response): The HTTP response object used to set redirect headers.
+            idp_name (str): The identity provider name used to select SAML configuration.
+
+        Response:
+            - HTTP 302 Redirect to mobile app with either encrypted payload (?data=...)
+            or legacy token fragment (#token=...).
+            - HTTP 401 Unauthorized if request is unsolicited or session validation fails
+            in encryption-required mode.
+            - HTTP 400 Bad Request if RelayState is invalid or missing required fields.
+        """
         saml_client = self.saml_manager.saml_client_for(idp_name)
         req.context['body'] = req.context['body'].decode('utf-8')
         form_data = falcon.uri.parse_query_string(req.context['body'])
@@ -113,39 +149,114 @@ class IDPInitiated(object):
             outstanding_certs=outstanding)
         req_id = authn_response.in_response_to
         unsolicited = req_id is None
+        if unsolicited:
+            raise falcon.HTTPUnauthorized('Unsolicited request')
+
         subject = authn_response.get_subject()
         username = subject.text
         if self.username_attr:
             username = authn_response.ava[self.username_attr][0]
-        refresh_token = hashlib.sha256(os.urandom(32)).hexdigest()
-        encrypted_token = self.fernet.encrypt(refresh_token.encode('utf-8'))
-        exp = time.time() + self.refresh_ttl
+
+        # Generate the actual refresh token and expiration
+        refresh_token = hashlib.sha256(uuid.uuid4().bytes).hexdigest()
+        refresh_exp = time.time() + self.refresh_ttl
+
+        # Parse RelayState as base64-encoded JSON, or fallback to legacy string
+        raw_relay_state = form_data.get('RelayState')
+        saml_session_id = None
+        redirect_location = self.redirect_url
+
+        try:
+            decoded = base64.urlsafe_b64decode(raw_relay_state.encode('utf-8')).decode('utf-8')
+            relay_state_data = ujson.loads(decoded)
+            redirect_location = relay_state_data.get('location', redirect_location)
+            saml_session_id = relay_state_data.get('saml_session_id')
+        except Exception:
+            if self.saml_encryption:
+                logger.info('Failed to decode RelayState')
+                raise falcon.HTTPBadRequest('Invalid RelayState for encrypted flow')
+            # Fallback: RelayState is a legacy location string
+            redirect_location = raw_relay_state or self.redirect_url
+
+        # Look up session data if saml_session_id is provided
+        session_data = None
         connection = db.connect()
         cursor = connection.cursor()
         try:
-            if not unsolicited:
-                cursor.execute('''DELETE FROM `saml_id` WHERE `id` = %s''', req_id)
-                if cursor.rowcount == 0:
-                    unsolicited = True
-            if unsolicited:
-                raise falcon.HTTPUnauthorized('Unsolicited request')
-            cursor.execute('''INSERT INTO `refresh_token` (`user_id`, `key`, `expiration`)
-                              VALUES ((SELECT `id` FROM `target` WHERE `name` = %s AND `type_id` =
-                                        (SELECT `id` FROM `target_type` WHERE `name` = 'user')),
-                                      %s,
-                                      %s)
-                              ''',
-                           (username, encrypted_token, exp))
+
+            if saml_session_id:
+                # delete expired sessions
+                cursor.execute('DELETE FROM saml_login_session WHERE created < UNIX_TIMESTAMP() - %s', (MAX_SAML_SESSION_TTL,))
+                # Fetch and consume session
+                cursor.execute('''
+                    SELECT client_key, device_id
+                    FROM saml_login_session
+                    WHERE id = %s
+                ''', (saml_session_id,))
+                session_data = cursor.fetchone()
+
+                if session_data:
+                    # session is one time use, so delete it after fetching
+                    cursor.execute('DELETE FROM saml_login_session WHERE id = %s', (saml_session_id,))
+                elif self.saml_encryption:
+                    raise falcon.HTTPUnauthorized('Session not found for RelayState')
+            elif self.saml_encryption:
+                raise falcon.HTTPUnauthorized('saml_session_id was not found in RelayState')
+
+            # validate req_id
+            self.validate_and_consume_saml_id(cursor, req_id)
+
+            # Store the encrypted refresh token in DB
+            encrypted_token = self.fernet.encrypt(refresh_token.encode('utf-8'))
+            cursor.execute('''
+                INSERT INTO refresh_token (user_id, `key`, expiration)
+                VALUES (
+                    (SELECT id FROM target
+                    WHERE name = %s AND type_id = (SELECT id FROM target_type WHERE name = 'user')),
+                    %s, %s
+                )
+            ''', (username, encrypted_token, refresh_exp))
             connection.commit()
             key_id = cursor.lastrowid
         finally:
             cursor.close()
             connection.close()
-        location = form_data.get('RelayState', self.redirect_url)
-        resp.set_header('Location', ''.join([location, '#token=', refresh_token,
-                                             '&keyId=', str(key_id), '&expiry=', str(exp),
-                                             '&username=', username]))
+
+        # If we have session data, encrypt response with the client-provided key
+        if session_data:
+            client_key, device_id = session_data
+            payload = {
+                "token": refresh_token,
+                "keyId": key_id,
+                "expiry": refresh_exp,
+                "username": username,
+                "created": int(time.time()),
+                "device_id": device_id
+            }
+            try:
+                f = Fernet(client_key.encode('utf-8'))
+            except Exception:
+                raise falcon.HTTPInternalServerError('Invalid encryption key in session data')
+
+            encrypted_payload = f.encrypt(ujson.dumps(payload).encode('utf-8')).decode('utf-8')
+            redirect_location = f"{redirect_location}?data={encrypted_payload}"
+        else:
+            # Legacy behavior: redirect with raw token in URL fragment
+            redirect_location = ''.join([
+                redirect_location,
+                '#token=', refresh_token,
+                '&keyId=', str(key_id),
+                '&expiry=', str(refresh_exp),
+                '&username=', username
+            ])
+
+        resp.set_header('Location', redirect_location)
         resp.status = falcon.HTTP_302
+
+    def validate_and_consume_saml_id(self, cursor, req_id):
+        cursor.execute('DELETE FROM saml_id WHERE id = %s', (req_id,))
+        if cursor.rowcount == 0:
+            raise falcon.HTTPUnauthorized('Unknown or expired SAML request ID')
 
 
 class TokenRefresh(object):
@@ -184,11 +295,43 @@ class SPInitiated(object):
         self.saml_manager = saml_manager
 
     def on_get(self, req, resp, idp_name):
+        """
+        Initiates a Service Provider (SP)-initiated SAML authentication flow.
+
+        This endpoint is called when a user begins login from the application side.
+        It prepares a SAML authentication request and issues a redirect to the
+        Identity Provider's (IdP) login endpoint.
+
+        It performs the following steps:
+        - Generates a SAML AuthN request using the configured SAML client.
+        - Cleans up old entries from the `saml_id` table based on a TTL.
+        - Limits the number of in-flight SAML requests to avoid resource abuse.
+        - Stores the request ID and timestamp in the `saml_id` table.
+        - Redirects the user to the IdP login URL provided by the SAML client.
+
+        Headers:
+            - Cache-Control and Pragma headers are explicitly set to avoid
+            caching of redirect responses, as recommended by SAML spec.
+
+        Query Parameters:
+            idp_name (str): The identity provider to use for login.
+
+        Response:
+            - HTTP 302 redirect to the IdP login page.
+            - HTTP 429 if too many active login sessions are in flight.
+        """
+
+        relayState = req.get_param('RelayState', default=None)
         saml_client = self.saml_manager.saml_client_for(idp_name)
-        reqid, info = saml_client.prepare_for_authenticate()
+        reqid, info = saml_client.prepare_for_authenticate(relay_state=relayState)
         connection = db.connect()
         cursor = connection.cursor()
         try:
+            cursor.execute('DELETE FROM saml_id WHERE timestamp < UNIX_TIMESTAMP() - %s', (MAX_SAML_SESSION_TTL,))
+            cursor.execute('SELECT COUNT(*) FROM saml_id')
+            if cursor.fetchone()[0] > MAX_LOGIN_SESSIONS:
+                raise falcon.HTTPTooManyRequests('Too many active auth sessions')
+
             cursor.execute('INSERT INTO `saml_id` (`id`, `timestamp`) VALUES (%s, %s)',
                            (reqid, int(time.time())))
             connection.commit()
@@ -244,6 +387,73 @@ class OncallCalendarRelay(object):
                 return
 
         raise falcon.HTTPInternalServerError('Internal Server Error', 'Invalid response from API')
+
+
+class SAMLInitiate(object):
+
+    def on_post(self, req, resp):
+        """
+        Endpoint: POST /saml/initiate
+
+        Initiates a SAML login session by accepting a client-generated encryption key and a device identifier.
+        Stores this data in the `saml_login_session` table along with a generated session ID and creation timestamp.
+
+        The session ID is returned to the client and must be included within RelayState in the SAML login flow.
+
+        Expected JSON request body:
+        {
+            "client_key": "<base64-encoded 256-bit symmetric key>",
+            "device_id": "<unique identifier for this device or app install>"
+        }
+
+        Successful JSON response:
+        {
+            "saml_session_id": "<server-generated UUID to be used as RelayState>"
+        }
+
+        Errors:
+        - Returns HTTP 400 if the request body is invalid or required fields are missing.
+        """
+        req.context['body'] = req.context['body'].decode('utf-8')
+        data = ujson.loads(req.context['body'])
+
+        client_key = data.get("client_key")
+        device_id = data.get("device_id")
+        if not client_key or not device_id:
+            raise falcon.HTTPBadRequest("Missing client_key or device_id")
+
+        try:
+            Fernet(client_key.encode('utf-8'))
+        except Exception:
+            raise falcon.HTTPBadRequest('Invalid client_key format')
+
+        connection = db.connect()
+        cursor = connection.cursor()
+        try:
+            # delete expired sessions
+            cursor.execute('DELETE FROM saml_login_session WHERE created < UNIX_TIMESTAMP() - %s', (MAX_SAML_SESSION_TTL,))
+            cursor.execute('SELECT COUNT(*) FROM saml_login_session')
+            session_count = cursor.fetchone()[0]
+            # prevent db from getting flooded if there were malicious requests
+            if session_count >= MAX_LOGIN_SESSIONS:
+                raise falcon.HTTPTooManyRequests('Too many active login sessions')
+
+            saml_session_id = str(uuid.uuid4())
+            cursor.execute(
+                '''
+                INSERT INTO saml_login_session (id, client_key, device_id, created)
+                VALUES (%s, %s, %s, UNIX_TIMESTAMP())
+                ''',
+                (saml_session_id, client_key, device_id)
+            )
+            connection.commit()
+        finally:
+            cursor.close()
+            connection.close()
+
+        resp.body = ujson.dumps({"saml_session_id": saml_session_id})
+        resp.status = falcon.HTTP_200
+        resp.content_type = 'application/json'
 
 
 class GmailRelay(object):
@@ -1005,6 +1215,7 @@ def get_relay_app(config=None):
                                               key=config['iris']['api_key'])
 
     saml = SAML(config.get('saml'))
+    saml_encryption = config.get('saml_encryption', False)
 
     # Note that ReqBodyMiddleware must be run before AuthMiddleware, since
     # authentication uses the post body
@@ -1064,7 +1275,8 @@ def get_relay_app(config=None):
         app.add_sink(oncall_mobile_sink, prefix='/api/v0/oncall/')
         app.add_sink(iris_mobile_sink, prefix='/api/v0/mobile/')
         app.add_route('/saml/login/{idp_name}', SPInitiated(saml))
-        app.add_route('/saml/sso/{idp_name}', IDPInitiated(mobile_cfg.get('auth'), saml))
+        app.add_route('/saml/sso/{idp_name}', IDPInitiated(mobile_cfg.get('auth'), saml, saml_encryption=saml_encryption))
+        app.add_route('/saml/initiate', SAMLInitiate())
         app.add_route('/api/v0/mobile/refresh', TokenRefresh(mobile_cfg.get('auth')))
         app.add_route('/api/v0/mobile/device', RegisterDevice(iclient, mobile_cfg['host']))
 

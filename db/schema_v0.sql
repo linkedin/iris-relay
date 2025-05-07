@@ -25,3 +25,11 @@ CREATE TABLE IF NOT EXISTS `saml_id` (
   `timestamp` BIGINT(20) UNSIGNED NOT NULL,
   PRIMARY KEY (`id`)
 );
+
+CREATE TABLE IF NOT EXISTS `saml_login_session` (
+  `id` VARCHAR(64) NOT NULL,
+  `client_key` VARCHAR(44) NOT NULL,
+  `device_id` VARCHAR(255) NOT NULL,
+  `created` BIGINT(20) UNSIGNED NOT NULL,
+  PRIMARY KEY (`id`)
+);
